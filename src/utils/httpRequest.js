@@ -7,7 +7,6 @@ import { clearLoginInfo } from '@/utils'
 
 const http = axios.create({
   timeout: 1000 * 30,
-  withCredentials: true,
   headers: {
     'Content-Type': 'application/json; charset=utf-8'
   }
@@ -41,8 +40,8 @@ http.interceptors.response.use(response => {
  * @param {*} actionName action方法名称
  */
 http.adornUrl = (actionName) => {
-  // 非生产环境 && 开启代理, 接口前缀统一使用[/proxyApi/]前缀做代理拦截!
-  return (process.env.NODE_ENV !== 'production' && process.env.OPEN_PROXY ? '/proxyApi/' : window.SITE_CONFIG.baseUrl) + actionName
+  // 后端已配置CORS，直接使用baseUrl
+  return window.SITE_CONFIG.baseUrl + actionName
 }
 
 /**

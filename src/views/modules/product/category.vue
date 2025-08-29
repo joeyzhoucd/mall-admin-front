@@ -2,6 +2,17 @@
   <div>
     <div class="block">
       <p>商品分类管理</p>
+      <div class="switch-container">
+        <el-row>
+          <el-switch
+            v-model="draggable"
+            active-text="允许拖拽"
+            inactive-text="禁止拖拽">
+          </el-switch>
+          <el-button v-if="draggable" type="danger" @click="batchSave">批量保存</el-button>
+          <el-button type="danger" @click="batchDelete">批量删除</el-button>
+        </el-row>
+      </div>
       <el-tree
         ref="tree"
         :data="data"
@@ -10,6 +21,9 @@
         :expand-on-click-node="false"
         :default-expanded-keys="expandedKeys"
         :props="defaultProps"
+        :draggable="draggable"
+        :allow-drop="allowDrop"
+        @node-drop="handleDrop"
         @check="handleCheck">
         <span class="custom-tree-node" slot-scope="{ node, data }">
           <span>{{ node.label }}</span>
@@ -100,6 +114,10 @@
           children: 'children',
           label: 'name'
         },
+        // 控制是否允许拖动
+        draggable: true,
+        // 记录拖拽改动的节点
+        draggedNodes: new Map(), // 存储拖拽后的节点信息
         // 对话框相关数据
         dialogVisible: false,
         dialogTitle: '',
@@ -156,6 +174,205 @@
       // 处理节点勾选事件
       handleCheck (data, checkedInfo) {
         this.selectedIds = checkedInfo.checkedKeys
+      },
+
+      // 获取下一个排序号
+      getNextSort (parentCid, level) {
+        let maxSort = 0
+        const findMaxSort = (categories) => {
+          for (const category of categories) {
+            if (category.parentCid === parentCid && category.catLevel === level) {
+              maxSort = Math.max(maxSort, category.sort || 0)
+            }
+            if (category.children && category.children.length > 0) {
+              findMaxSort(category.children)
+            }
+          }
+        }
+        findMaxSort(this.data)
+        return maxSort + 1
+      },
+
+      // 批量保存拖拽改动
+      async batchSave () {
+        if (this.draggedNodes.size === 0) {
+          this.$message.warning('没有需要保存的改动')
+          return
+        }
+
+        try {
+          await this.$confirm(`确定要保存 ${this.draggedNodes.size} 个分类的改动吗？`, '确认保存', {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          })
+
+          const updateData = Array.from(this.draggedNodes.values()).map(node => ({
+            catId: node.catId,
+            parentCid: node.parentCid,
+            catLevel: node.catLevel,
+            sort: node.sort
+          }))
+
+          const response = await http({
+            url: http.adornUrl('/product/category/save/drag'),
+            method: 'post',
+            data: http.adornData(updateData)
+          })
+
+          if (response.data && response.data.code === 0) {
+            this.$message.success('批量保存成功')
+            // 获取最后拖拽的节点ID，用于展开
+            const lastDraggedNodeId = Array.from(this.draggedNodes.keys()).pop()
+            this.draggedNodes.clear() // 清空改动记录
+            await this.getCategoryTree() // 重新加载数据
+
+            // 展开最后拖拽的节点
+            if (lastDraggedNodeId) {
+              this.expandedKeys = [lastDraggedNodeId]
+            }
+          } else {
+            this.$message.error(response.data.msg || '批量保存失败')
+          }
+        } catch (error) {
+          if (error !== 'cancel') {
+            console.error('批量保存失败:', error)
+            this.$message.error('批量保存失败')
+          }
+        }
+      },
+
+      // 批量删除选中的分类
+      async batchDelete () {
+        if (this.selectedIds.length === 0) {
+          this.$message.warning('请先选择要删除的分类')
+          return
+        }
+
+        try {
+          await this.$confirm(`确定要删除选中的 ${this.selectedIds.length} 个分类吗？`, '确认删除', {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          })
+
+          const response = await http({
+            url: http.adornUrl('/product/category/delete'),
+            method: 'post',
+            data: this.selectedIds
+          })
+
+          if (response.data && response.data.code === 0) {
+            this.$message.success('批量删除成功')
+            this.selectedIds = [] // 清空选中
+            this.draggedNodes.clear() // 清空拖拽记录
+            await this.getCategoryTree() // 重新加载数据
+          } else {
+            this.$message.error(response.data.msg || '批量删除失败')
+          }
+        } catch (error) {
+          if (error !== 'cancel') {
+            console.error('批量删除失败:', error)
+            this.$message.error('批量删除失败')
+          }
+        }
+      },
+
+      handleDrop (draggingNode, dropNode, dropType, ev) {
+        console.log('tree drop: ', draggingNode, dropNode.label, dropType)
+
+        // 记录拖拽改动的节点信息
+        const draggedData = draggingNode.data
+        const dropData = dropNode.data
+
+        // 计算新的层级和父级ID
+        let newLevel, newParentCid, newSort
+
+        if (dropType === 'inner') {
+          // 拖拽到节点内部
+          newLevel = dropData.catLevel + 1
+          newParentCid = dropData.catId
+          newSort = this.getNextSort(dropData.catId, newLevel)
+        } else {
+          // 拖拽到节点前后
+          newLevel = dropData.catLevel
+          newParentCid = dropData.parentCid
+          newSort = this.getNextSort(newParentCid, newLevel)
+        }
+
+        // 记录拖拽节点及其所有子节点的改动信息
+        this.recordNodeAndChildrenChanges(draggedData, newParentCid, newLevel, newSort)
+
+        console.log('拖拽改动记录: ', this.draggedNodes)
+      },
+
+      // 递归记录节点及其子节点的改动
+      recordNodeAndChildrenChanges (nodeData, newParentCid, newLevel, newSort) {
+        // 记录当前节点
+        this.draggedNodes.set(nodeData.catId, {
+          catId: nodeData.catId,
+          name: nodeData.name,
+          parentCid: newParentCid,
+          catLevel: newLevel,
+          sort: newSort,
+          showStatus: nodeData.showStatus,
+          icon: nodeData.icon,
+          productUnit: nodeData.productUnit,
+          originalData: { ...nodeData }
+        })
+
+        // 递归处理子节点
+        if (nodeData.children && nodeData.children.length > 0) {
+          nodeData.children.forEach((child, index) => {
+            const childNewLevel = newLevel + 1
+            const childNewSort = this.getNextSort(newParentCid, childNewLevel) + index
+            this.recordNodeAndChildrenChanges(child, nodeData.catId, childNewLevel, childNewSort)
+          })
+        }
+      },
+
+      allowDrop (draggingNode, dropNode, type) {
+        // 计算拖拽节点的子节点最大深度
+        const draggingMaxLevel = this.getDraggingNodeMaxLevel(draggingNode)
+        console.log('draggingMaxLevel: ', draggingMaxLevel)
+        console.log('dropNode.level: ', dropNode.level)
+
+        if (type === 'inner') {
+          // 拖拽到节点内部：目标节点层级 + 1 + 拖拽节点的子节点最大深度 <= 3
+          return dropNode.level + 1 + draggingMaxLevel <= 3
+        }
+        if (type === 'prev' || type === 'next') {
+          // 拖拽到节点前后：目标节点层级 + 拖拽节点的子节点最大深度 <= 3
+          return dropNode.level + draggingMaxLevel <= 3
+        }
+        return false
+      },
+
+      // 获取拖拽节点的子节点最大深度
+      getDraggingNodeMaxLevel (node) {
+        console.log('node---: ', node)
+        if (!node || !node.childNodes || node.childNodes.length === 0) {
+          return 0 // 没有子节点，深度为0
+        }
+
+        // 直接遍历所有子节点，找出最大的level
+        let maxChildLevel = node.level
+        const findMaxLevel = (children) => {
+          for (let i = 0; i < children.length; i++) {
+            const child = children[i]
+            console.log('child.level: ', child.level)
+            if (child.level > maxChildLevel) {
+              maxChildLevel = child.level
+            }
+            if (child.childNodes && child.childNodes.length > 0) {
+              findMaxLevel(child.childNodes)
+            }
+          }
+        }
+
+        findMaxLevel(node.childNodes)
+        // 返回子节点的最大深度 = 最大子节点level - 当前节点level
+        return maxChildLevel - node.level
       },
 
       // 递归获取所有子分类ID
@@ -383,5 +600,9 @@
 
 .custom-tree-node span:first-child {
   margin-right: 10px;
+}
+
+.switch-container {
+  margin: 15px 0 15px 25px;
 }
 </style>
