@@ -11,6 +11,7 @@
           </el-switch>
           <el-button v-if="draggable" type="danger" @click="batchSave">批量保存</el-button>
           <el-button type="danger" @click="batchDelete">批量删除</el-button>
+          <el-button type="primary" @click="goToAttrGroup">属性分组管理</el-button>
         </el-row>
       </div>
       <el-tree
@@ -578,6 +579,11 @@
     async created () {
       // 生命周期 - 创建完成（可以访问当前this）
       await this.getCategoryTree()
+    },
+
+    // 跳转到属性分组管理
+    goToAttrGroup () {
+      this.$router.push('/product/attr-group')
     },
     beforeMount () {}, // 生命周期 - 挂载前
     mounted () {}, // 生命周期 - 挂载完成（可以访问DOM元素）
