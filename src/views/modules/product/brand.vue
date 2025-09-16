@@ -68,7 +68,7 @@
         </el-table-column>
         <el-table-column
           label="操作"
-          width="200">
+          width="280">
           <template slot-scope="scope">
             <el-button
               type="text"
@@ -81,6 +81,12 @@
               size="mini"
               @click="deleteBrand(scope.row)">
               删除
+            </el-button>
+            <el-button
+              type="text"
+              size="mini"
+              @click="manageCategoryRelation(scope.row)">
+              关联分类
             </el-button>
           </template>
         </el-table-column>
@@ -152,6 +158,49 @@
         <el-button type="primary" @click="submitForm" :loading="submitLoading">确 定</el-button>
       </div>
     </el-dialog>
+
+    <!-- 品牌关联分类对话框 -->
+    <el-dialog
+      title="品牌关联分类"
+      :visible.sync="categoryRelationDialogVisible"
+      width="800px"
+      @close="handleCategoryRelationDialogClose">
+      <div class="category-relation-container">
+        <div class="brand-info">
+          <h4>品牌信息：{{ currentBrand.name }}</h4>
+        </div>
+
+        <div class="category-selection">
+          <h4>选择要关联的分类：</h4>
+          <el-tree
+            ref="categoryTree"
+            :data="categoryTreeData"
+            show-checkbox
+            node-key="catId"
+            :props="categoryTreeProps"
+            :default-expanded-keys="expandedCategoryKeys"
+            @check="handleCategoryCheck">
+          </el-tree>
+        </div>
+
+        <div class="selected-categories" v-if="selectedCategories.length > 0">
+          <h4>已选择的分类：</h4>
+          <el-tag
+            v-for="category in selectedCategories"
+            :key="category.catId"
+            closable
+            @close="removeCategory(category)"
+            style="margin-right: 8px; margin-bottom: 8px;">
+            {{ category.name }}
+          </el-tag>
+        </div>
+      </div>
+
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="categoryRelationDialogVisible = false">取 消</el-button>
+        <el-button type="primary" @click="saveCategoryRelation" :loading="saveRelationLoading">保 存</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -202,7 +251,19 @@
           sort: [
             { required: true, message: '请输入排序', trigger: 'blur' }
           ]
-        }
+        },
+
+        // 品牌关联分类相关数据
+        categoryRelationDialogVisible: false,
+        currentBrand: {},
+        categoryTreeData: [],
+        categoryTreeProps: {
+          children: 'children',
+          label: 'name'
+        },
+        expandedCategoryKeys: [],
+        selectedCategories: [],
+        saveRelationLoading: false
       }
     },
     computed: {},
@@ -221,8 +282,8 @@
             })
           })
           if (response.data && response.data.code === 0) {
-            this.brandList = response.data.page.list || []
-            this.total = response.data.page.totalCount || 0
+            this.brandList = response.data.data.list || []
+            this.total = response.data.data.totalCount || 0
           } else {
             this.$message.error(response.data.msg || '获取品牌列表失败')
           }
@@ -407,10 +468,212 @@
           confirmButtonText: '关闭',
           customClass: 'image-preview-dialog',
           beforeClose: () => {
-            // 清理DOM元素
+            // 清理DOM元�
             div.remove()
           }
         })
+      },
+
+      // 管理品牌分类关联
+      async manageCategoryRelation (brand) {
+        this.currentBrand = { ...brand }
+        this.categoryRelationDialogVisible = true
+        this.selectedCategories = []
+
+        // 获取分类树数据
+        await this.getCategoryTree()
+
+        // 获取该品牌已关联的分类
+        await this.getBrandCategoryRelations(brand.brandId)
+      },
+
+      // 获取分类树数据
+      async getCategoryTree () {
+        try {
+          const response = await http({
+            url: http.adornUrl('/product/category/list/tree'),
+            method: 'get'
+          })
+
+          if (response.data && response.data.code === 0) {
+            this.categoryTreeData = response.data.data || []
+            // 默认折叠所有节点，不展开
+            this.expandedCategoryKeys = []
+          } else {
+            this.$message.error(response.data.msg || '获取分类列表失败')
+          }
+        } catch (error) {
+          console.error('获取分类列表失败:', error)
+          this.$message.error('获取分类列表失败')
+        }
+      },
+
+      // 获取所有分类ID（用于展开树节点）
+      getAllCategoryIds (categories) {
+        let ids = []
+        categories.forEach(category => {
+          ids.push(category.catId)
+          if (category.children && category.children.length > 0) {
+            ids = ids.concat(this.getAllCategoryIds(category.children))
+          }
+        })
+        return ids
+      },
+
+      // 展开包含已选中分类的父节点
+      expandNodesWithSelectedCategories (selectedKeys) {
+        const expandedKeys = new Set()
+        
+        // 递归查找包含选中节点的父节点
+        const findParentNodes = (categories, targetKeys) => {
+          categories.forEach(category => {
+            if (category.children && category.children.length > 0) {
+              // 检查子节点中是否有选中的节点
+              const hasSelectedChild = this.hasSelectedChild(category.children, targetKeys)
+              if (hasSelectedChild) {
+                expandedKeys.add(category.catId)
+                // 递归检查更深层的父节点
+                findParentNodes(category.children, targetKeys)
+              }
+            }
+          })
+        }
+        
+        findParentNodes(this.categoryTreeData, selectedKeys)
+        this.expandedCategoryKeys = Array.from(expandedKeys)
+      },
+
+      // 检查节点及其子节点中是否有选中的节点
+      hasSelectedChild (categories, selectedKeys) {
+        for (let category of categories) {
+          if (selectedKeys.includes(category.catId)) {
+            return true
+          }
+          if (category.children && category.children.length > 0) {
+            if (this.hasSelectedChild(category.children, selectedKeys)) {
+              return true
+            }
+          }
+        }
+        return false
+      },
+
+      // 获取品牌已关联的分类
+      async getBrandCategoryRelations (brandId) {
+        try {
+          const response = await http({
+            url: http.adornUrl(`/product/categorybrandrelation/getRelationsByBrandId/${brandId}`),
+            method: 'get'
+          })
+
+          if (response.data && response.data.code === 0) {
+            const responseData = response.data.data
+            console.log('获取到的关联数据:', responseData)
+            
+            // 判断返回的数据格式
+            let relations = []
+            if (Array.isArray(responseData)) {
+              // 直接返回数组
+              relations = responseData
+            } else if (responseData && responseData.list) {
+              // 分页格式
+              relations = responseData.list
+            }
+            
+            console.log('关联列表:', relations)
+            
+            // 将已关联的分类添加到选中列表
+            this.selectedCategories = relations.map(relation => ({
+              catId: relation.categoryId,
+              name: relation.categoryName
+            }))
+            
+            console.log('处理后的选中分类:', this.selectedCategories)
+
+            // 设置树节点的选中状态和展开状态
+            this.$nextTick(() => {
+              const checkedKeys = this.selectedCategories.map(cat => cat.catId)
+              this.$refs.categoryTree.setCheckedKeys(checkedKeys)
+              
+              // 展开包含已选中分类的父节点
+              this.expandNodesWithSelectedCategories(checkedKeys)
+            })
+          }
+        } catch (error) {
+          console.error('获取品牌分类关联失败:', error)
+        }
+      },
+
+      // 处理分类选择
+      handleCategoryCheck (checkedNodes, checkedInfo) {
+        // 获取所有选中的节点（包括半选中的父节点）
+        const allCheckedNodes = this.$refs.categoryTree.getCheckedNodes()
+
+        // 只保留叶子节点（三级分类）
+        const leafNodes = allCheckedNodes.filter(node => !node.children || node.children.length === 0)
+        this.selectedCategories = leafNodes.map(node => ({
+          catId: node.catId,
+          name: node.name
+        }))
+      },
+
+      // 移除分类
+      removeCategory (category) {
+        const index = this.selectedCategories.findIndex(cat => cat.catId === category.catId)
+        if (index > -1) {
+          this.selectedCategories.splice(index, 1)
+          // 更新树节点的选中状态
+          this.$nextTick(() => {
+            const checkedKeys = this.selectedCategories.map(cat => cat.catId)
+            this.$refs.categoryTree.setCheckedKeys(checkedKeys)
+          })
+        }
+      },
+
+      // 保存品牌分类关联
+      async saveCategoryRelation () {
+        if (this.selectedCategories.length === 0) {
+          this.$message.warning('请至少选择一个分类')
+          return
+        }
+
+        this.saveRelationLoading = true
+        try {
+          // 提取分类ID列表
+          const categoryIds = this.selectedCategories.map(category => category.catId)
+
+          console.log('品牌ID:', this.currentBrand.brandId)
+          console.log('分类ID列表:', categoryIds)
+
+          // 调用统一的更新接口（在一个事务中处理删除和添加）
+          const response = await http({
+            url: http.adornUrl(`/product/categorybrandrelation/updateRelations/${this.currentBrand.brandId}`),
+            method: 'post',
+            data: categoryIds
+          })
+
+          console.log('更新响应:', response)
+
+          if (response.data && response.data.code === 0) {
+            this.$message.success('关联分类保存成功')
+            this.categoryRelationDialogVisible = false
+          } else {
+            this.$message.error(response.data.msg || '保存失败')
+          }
+        } catch (error) {
+          console.error('保存品牌分类关联失败:', error)
+          this.$message.error('保存失败')
+        } finally {
+          this.saveRelationLoading = false
+        }
+      },
+
+      // 关闭品牌分类关联对话框
+      handleCategoryRelationDialogClose () {
+        this.currentBrand = {}
+        this.categoryTreeData = []
+        this.selectedCategories = []
+        this.expandedCategoryKeys = []
       }
     },
     // 生命周期钩子
@@ -450,5 +713,44 @@
 /* 图片预览对话框样式 */
 :global(.image-preview-dialog) {
   max-width: 500px !important;
+}
+
+/* 品牌关联分类对话框样式 */
+.category-relation-container {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.brand-info {
+  margin-bottom: 20px;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+}
+
+.brand-info h4 {
+  margin: 0;
+  color: #409EFF;
+}
+
+.category-selection {
+  margin-bottom: 20px;
+}
+
+.category-selection h4 {
+  margin: 0 0 10px 0;
+  color: #333;
+}
+
+.selected-categories {
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+}
+
+.selected-categories h4 {
+  margin: 0 0 10px 0;
+  color: #333;
 }
 </style>

@@ -253,8 +253,8 @@ export default {
         })
 
         if (response.data && response.data.code === 0) {
-          this.groupList = response.data.page.list || []
-          this.total = response.data.page.totalCount || 0
+          this.groupList = response.data.data.list || []
+          this.total = response.data.data.totalCount || 0
         } else {
           this.$message.error(response.data.msg || '获取属性分组列表失败')
         }
