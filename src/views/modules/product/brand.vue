@@ -523,7 +523,7 @@
       // 展开包含已选中分类的父节点
       expandNodesWithSelectedCategories (selectedKeys) {
         const expandedKeys = new Set()
-        
+
         // 递归查找包含选中节点的父节点
         const findParentNodes = (categories, targetKeys) => {
           categories.forEach(category => {
@@ -538,7 +538,7 @@
             }
           })
         }
-        
+
         findParentNodes(this.categoryTreeData, selectedKeys)
         this.expandedCategoryKeys = Array.from(expandedKeys)
       },
@@ -569,7 +569,7 @@
           if (response.data && response.data.code === 0) {
             const responseData = response.data.data
             console.log('获取到的关联数据:', responseData)
-            
+
             // 判断返回的数据格式
             let relations = []
             if (Array.isArray(responseData)) {
@@ -579,22 +579,22 @@
               // 分页格式
               relations = responseData.list
             }
-            
+
             console.log('关联列表:', relations)
-            
+
             // 将已关联的分类添加到选中列表
             this.selectedCategories = relations.map(relation => ({
               catId: relation.categoryId,
               name: relation.categoryName
             }))
-            
+
             console.log('处理后的选中分类:', this.selectedCategories)
 
             // 设置树节点的选中状态和展开状态
             this.$nextTick(() => {
               const checkedKeys = this.selectedCategories.map(cat => cat.catId)
               this.$refs.categoryTree.setCheckedKeys(checkedKeys)
-              
+
               // 展开包含已选中分类的父节点
               this.expandNodesWithSelectedCategories(checkedKeys)
             })

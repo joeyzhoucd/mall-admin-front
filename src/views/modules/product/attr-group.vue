@@ -31,6 +31,7 @@
         :data="groupList"
         v-loading="loading"
         style="width: 100%"
+        height="calc(100vh - 260px)"
         @selection-change="handleSelectionChange">
         <el-table-column
           type="selection"
@@ -72,19 +73,25 @@
           </template>
         </el-table-column>
         <el-table-column
-          prop="catelogId"
-          label="所属分类id"
+          prop="categoryId"
+          label="所属分类ID"
           width="120">
         </el-table-column>
         <el-table-column
           label="操作"
-          width="150">
+          width="200">
           <template slot-scope="scope">
             <el-button
               type="text"
               size="mini"
               @click="editGroup(scope.row)">
               修改
+            </el-button>
+            <el-button
+              type="text"
+              size="mini"
+              @click="manageAttrRelation(scope.row)">
+              关联属性
             </el-button>
             <el-button
               type="text"
@@ -144,7 +151,7 @@
             @error="onIconUploadError">
           </oss-upload>
         </el-form-item>
-        <el-form-item label="所属分类" prop="catelogId">
+        <el-form-item label="所属分类" prop="categoryId">
           <el-input
             v-model="categoryName"
             disabled
@@ -155,6 +162,91 @@
       <div slot="footer" class="dialog-footer">
         <el-button @click="dialogVisible = false">取 消</el-button>
         <el-button type="primary" @click="submitForm" :loading="submitLoading">确 定</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 关联属性对话框 -->
+    <el-dialog
+      title="关联属性"
+      :visible.sync="attrRelationDialogVisible"
+      width="800px"
+      @close="handleAttrRelationDialogClose">
+      <div class="attr-relation-container">
+        <!-- 已关联的属性 -->
+        <div class="related-attr-section">
+          <h4>已关联的属性</h4>
+          <div class="related-attr-list">
+            <el-tag
+              v-for="attr in relatedAttrs"
+              :key="attr.attrId"
+              closable
+              @close="removeAttrRelation(attr)"
+              style="margin: 5px;">
+              {{ attr.attrName }}
+            </el-tag>
+            <span v-if="relatedAttrs.length === 0" class="no-data">暂无关联属性</span>
+          </div>
+        </div>
+
+        <!-- 可关联的属性 -->
+        <div class="available-attr-section">
+          <h4>可关联的属性</h4>
+          <el-table
+            :data="availableAttrs"
+            v-loading="attrLoading"
+            style="width: 100%"
+            height="300px"
+            @selection-change="handleAttrSelectionChange">
+            <el-table-column
+              type="selection"
+              width="55">
+            </el-table-column>
+            <el-table-column
+              prop="attrId"
+              label="属性ID"
+              width="100">
+            </el-table-column>
+            <el-table-column
+              prop="attrName"
+              label="属性名"
+              width="150">
+            </el-table-column>
+            <el-table-column
+              prop="searchType"
+              label="是否检索"
+              width="100">
+              <template slot-scope="scope">
+                <el-tag :type="scope.row.searchType === 1 ? 'success' : 'info'">
+                  {{ scope.row.searchType === 1 ? '需要' : '不需要' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="attrType"
+              label="属性类型"
+              width="100">
+              <template slot-scope="scope">
+                <el-tag :type="scope.row.attrType === 1 ? 'primary' : 'warning'">
+                  {{ scope.row.attrType === 1 ? '基本属性' : '销售属性' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="enable"
+              label="状态"
+              width="80">
+              <template slot-scope="scope">
+                <el-tag :type="scope.row.enable === 1 ? 'success' : 'danger'">
+                  {{ scope.row.enable === 1 ? '启用' : '禁用' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="attrRelationDialogVisible = false">取 消</el-button>
+        <el-button type="primary" @click="saveAttrRelation" :loading="saveRelationLoading">保 存</el-button>
       </div>
     </el-dialog>
   </div>
@@ -201,7 +293,7 @@ export default {
         sort: 0,
         descript: '',
         icon: '',
-        catelogId: null
+        categoryId: null
       },
       // 表单验证规则
       groupRules: {
@@ -212,10 +304,19 @@ export default {
         sort: [
           { required: true, message: '请输入排序', trigger: 'blur' }
         ],
-        catelogId: [
+        categoryId: [
           { required: true, message: '请先选择分类', trigger: 'change' }
         ]
-      }
+      },
+
+      // 关联属性相关数据
+      attrRelationDialogVisible: false,
+      currentAttrGroup: null, // 当前操作的属性分组
+      relatedAttrs: [], // 已关联的属性
+      availableAttrs: [], // 可关联的属性
+      selectedAttrs: [], // 选中的属性
+      attrLoading: false,
+      saveRelationLoading: false
     }
   },
   methods: {
@@ -223,7 +324,7 @@ export default {
     handleCategoryClick (category) {
       this.selectedCategory = category
       this.categoryName = category.name
-      this.groupForm.catelogId = category.catId
+      this.groupForm.categoryId = category.catId
       this.getGroupList()
     },
 
@@ -240,7 +341,7 @@ export default {
         const params = {
           page: this.page,
           limit: this.limit,
-          catelogId: this.selectedCategory.catId
+          categoryId: this.selectedCategory.catId
         }
         if (this.searchForm.attrGroupName) {
           params.attrGroupName = this.searchForm.attrGroupName
@@ -287,7 +388,7 @@ export default {
         sort: 0,
         descript: '',
         icon: '',
-        catelogId: this.selectedCategory.catId
+        categoryId: this.selectedCategory.catId
       }
     },
 
@@ -413,7 +514,7 @@ export default {
         sort: 0,
         descript: '',
         icon: '',
-        catelogId: this.selectedCategory ? this.selectedCategory.catId : null
+        categoryId: this.selectedCategory ? this.selectedCategory.catId : null
       }
     },
 
@@ -463,6 +564,145 @@ export default {
           div.remove()
         }
       })
+    },
+
+    // 管理属性关联
+    async manageAttrRelation (attrGroup) {
+      this.currentAttrGroup = attrGroup
+      this.attrRelationDialogVisible = true
+      await this.getRelatedAttrs()
+      await this.getAvailableAttrs()
+    },
+
+    // 获取已关联的属性
+    async getRelatedAttrs () {
+      if (!this.currentAttrGroup) return
+
+      try {
+        const response = await http({
+          url: http.adornUrl(`/product/attrattrgrouprelation/getAttrsByGroupId/${this.currentAttrGroup.attrGroupId}`),
+          method: 'get'
+        })
+
+        if (response.data && response.data.code === 0) {
+          this.relatedAttrs = response.data.data || []
+        } else {
+          this.relatedAttrs = []
+        }
+      } catch (error) {
+        console.error('获取已关联属性失败:', error)
+        this.relatedAttrs = []
+      }
+    },
+
+    // 获取可关联的属性
+    async getAvailableAttrs () {
+      if (!this.currentAttrGroup) return
+
+      this.attrLoading = true
+      try {
+        const response = await http({
+          url: http.adornUrl('/product/attr/list'),
+          method: 'get',
+          params: http.adornParams({
+            categoryId: this.currentAttrGroup.categoryId,
+            attrType: 1 // 只获取基本属性
+          })
+        })
+
+        if (response.data && response.data.code === 0) {
+          const allAttrs = response.data.data.list || []
+          // 过滤掉已关联的属性
+          const relatedAttrIds = this.relatedAttrs.map(attr => attr.attrId)
+          this.availableAttrs = allAttrs.filter(attr => !relatedAttrIds.includes(attr.attrId))
+        } else {
+          this.availableAttrs = []
+        }
+      } catch (error) {
+        console.error('获取可关联属性失败:', error)
+        this.availableAttrs = []
+      } finally {
+        this.attrLoading = false
+      }
+    },
+
+    // 处理属性选择变化
+    handleAttrSelectionChange (selection) {
+      this.selectedAttrs = selection
+    },
+
+    // 移除属性关联
+    async removeAttrRelation (attr) {
+      try {
+        await this.$confirm(`确定要移除属性"${attr.attrName}"的关联吗？`, '确认移除', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+
+        const response = await http({
+          url: http.adornUrl(`/product/attrattrgrouprelation/delete/${attr.attrId}/${this.currentAttrGroup.attrGroupId}`),
+          method: 'post'
+        })
+
+        if (response.data && response.data.code === 0) {
+          this.$message.success('移除关联成功')
+          await this.getRelatedAttrs()
+          await this.getAvailableAttrs()
+        } else {
+          this.$message.error(response.data.msg || '移除关联失败')
+        }
+      } catch (error) {
+        if (error !== 'cancel') {
+          console.error('移除关联失败:', error)
+          this.$message.error('移除关联失败')
+        }
+      }
+    },
+
+    // 保存属性关联
+    async saveAttrRelation () {
+      if (this.selectedAttrs.length === 0) {
+        this.$message.warning('请选择要关联的属性')
+        return
+      }
+
+      this.saveRelationLoading = true
+      try {
+        const relations = this.selectedAttrs.map((attr, index) => ({
+          attrId: attr.attrId,
+          attrGroupId: this.currentAttrGroup.attrGroupId,
+          attrSort: index + 1
+        }))
+
+        const response = await http({
+          url: http.adornUrl('/product/attrattrgrouprelation/saveBatch'),
+          method: 'post',
+          data: relations
+        })
+
+        if (response.data && response.data.code === 0) {
+          this.$message.success('关联属性成功')
+          this.attrRelationDialogVisible = false
+          await this.getRelatedAttrs()
+          await this.getAvailableAttrs()
+        } else {
+          this.$message.error(response.data.msg || '关联属性失败')
+        }
+      } catch (error) {
+        console.error('关联属性失败:', error)
+        this.$message.error('关联属性失败')
+      } finally {
+        this.saveRelationLoading = false
+      }
+    },
+
+    // 关联属性对话框关闭处理
+    handleAttrRelationDialogClose () {
+      this.currentAttrGroup = null
+      this.relatedAttrs = []
+      this.availableAttrs = []
+      this.selectedAttrs = []
     }
   }
 }
@@ -486,6 +726,7 @@ export default {
   background: #fff;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .content-header {
@@ -505,6 +746,7 @@ export default {
 .operation-container {
   padding: 16px 20px;
   border-bottom: 1px solid #e6e6e6;
+  background: #fff;
 }
 
 .el-pagination {
@@ -524,5 +766,39 @@ export default {
 /* 图片预览对话框样式 */
 :global(.image-preview-dialog) {
   max-width: 500px !important;
+}
+
+/* 关联属性对话框样式 */
+.attr-relation-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.related-attr-section,
+.available-attr-section {
+  border: 1px solid #e6e6e6;
+  border-radius: 4px;
+  padding: 16px;
+}
+
+.related-attr-section h4,
+.available-attr-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.related-attr-list {
+  min-height: 40px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.no-data {
+  color: #999;
+  font-size: 12px;
 }
 </style>
