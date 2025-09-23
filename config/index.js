@@ -15,7 +15,7 @@ module.exports = {
     proxyTable: {}, // 后端已配置CORS，不需要代理
     // proxyTable: devEnv.OPEN_PROXY === false ? {} : {
     //   '/proxyApi': {
-    //     target: 'http://demo.renren.io/renren-fast/',
+    //     target: 'http://localhost:88/api',
     //     changeOrigin: true,
     //     pathRewrite: {
     //       '^/proxyApi': '/'
