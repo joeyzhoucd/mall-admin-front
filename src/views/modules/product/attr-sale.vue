@@ -1,16 +1,16 @@
 <template>
-  <div class="attr-spec-container">
+  <div class="attr-sale-container">
     <div class="left-panel">
-      <tree-selector title="规格参数" @node-click="handleCategoryClick" />
+      <tree-selector title="销售属性" @node-click="handleCategoryClick" />
     </div>
 
     <div class="right-panel">
       <div class="content-header">
-        <span class="content-title">规格参数</span>
+        <span class="content-title">销售属性</span>
       </div>
 
       <div class="operation-container">
-        <el-input v-model="searchForm.attrName" placeholder="参数名" style="width: 200px; margin-right: 10px;" />
+        <el-input v-model="searchForm.attrName" placeholder="属性名" style="width: 200px; margin-right: 10px;" />
         <el-select v-model="searchForm.searchType" placeholder="可检索" clearable style="width: 120px; margin-right: 10px;">
           <el-option :value="1" label="是" />
           <el-option :value="0" label="否" />
@@ -23,7 +23,7 @@
       <el-table :data="attrList" v-loading="loading" style="width: 100%" @selection-change="handleSelectionChange" size="mini" align="center">
         <el-table-column type="selection" width="50" align="center" />
         <el-table-column prop="attrId" label="ID" width="100" align="center" show-overflow-tooltip />
-        <el-table-column prop="attrName" label="参数名" min-width="120" align="center" show-overflow-tooltip />
+        <el-table-column prop="attrName" label="属性名" min-width="120" align="center" show-overflow-tooltip />
         <el-table-column prop="searchType" label="检索" width="70" align="center">
           <template slot-scope="scope">
             <el-tag :type="scope.row.searchType === 1 ? 'success' : 'info'" size="mini">{{ scope.row.searchType === 1 ? '是' : '否' }}</el-tag>
@@ -48,32 +48,46 @@
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column prop="icon" label="图标" width="70" align="center">
+        <el-table-column prop="enable" label="状态" width="70" align="center">
           <template slot-scope="scope">
-            <img v-if="scope.row.icon" :src="scope.row.icon" class="attr-icon" style="width: 24px; height: 24px; display: block; border: 1px solid #ddd; background-color: #f5f5f5; object-fit: contain; border-radius: 4px;" />
-            <span v-else>—</span>
+            <el-switch
+              v-model="scope.row.enable"
+              :active-value="1"
+              :inactive-value="0"
+              @change="updateEnable(scope.row)">
+            </el-switch>
           </template>
         </el-table-column>
-        <el-table-column prop="enable" label="启用" width="80" align="center">
+        <el-table-column prop="showDesc" label="快速展示" width="90" align="center">
           <template slot-scope="scope">
-            <el-switch v-model="scope.row.enable" :active-value="1" :inactive-value="0" @change="toggleEnable(scope.row)" size="mini" />
+            <el-tag :type="scope.row.showDesc === 1 ? 'success' : 'info'" size="mini">
+              {{ scope.row.showDesc === 1 ? '是' : '否' }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="categoryName" label="分类" min-width="100" align="center" show-overflow-tooltip />
-        <el-table-column prop="attrGroupName" label="分组" min-width="100" align="center" show-overflow-tooltip />
-        <el-table-column label="操作" width="120" align="center">
+        <el-table-column label="操作" width="150" align="center" fixed="right">
           <template slot-scope="scope">
-            <el-button type="text" size="mini" @click="editAttr(scope.row)">修改</el-button>
-            <el-button type="text" size="mini" @click="deleteAttr(scope.row)">删除</el-button>
+            <el-button type="text" size="mini" @click="editAttr(scope.row)">编辑</el-button>
+            <el-button type="text" size="mini" @click="deleteAttr(scope.row)" style="color: #f56c6c;">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <el-pagination @size-change="handleSizeChange" @current-change="handleCurrentChange" :current-page="page" :page-sizes="[10, 20, 50, 100]" :page-size="limit" layout="total, sizes, prev, pager, next, jumper" :total="total" />
+      <div class="pagination-container">
+        <el-pagination
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+          :current-page="page"
+          :page-sizes="[10, 20, 50, 100]"
+          :page-size="limit"
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="total">
+        </el-pagination>
+      </div>
 
       <el-dialog :title="dialogTitle" :visible.sync="dialogVisible" width="650px" @close="handleDialogClose">
         <el-form ref="attrForm" :model="attrForm" :rules="attrRules" label-width="110px">
-          <el-form-item label="参数名" prop="attrName">
+          <el-form-item label="属性名" prop="attrName">
             <el-input v-model="attrForm.attrName" />
           </el-form-item>
           <el-form-item label="可检索" prop="searchType">
@@ -97,7 +111,7 @@
             </oss-upload>
           </el-form-item>
           <el-form-item label="可选值列表" prop="valueSelect">
-            <div class="value-select-container">
+            <div class="value-input-container">
               <div class="value-tags">
                 <el-tag
                   v-for="(value, index) in valueList"
@@ -117,16 +131,6 @@
                 <el-button slot="append" icon="el-icon-plus" @click="addValue"></el-button>
               </el-input>
             </div>
-          </el-form-item>
-          <el-form-item label="所属分组" prop="attrGroupId">
-            <el-select v-model="attrForm.attrGroupId" placeholder="请选择所属分组" clearable filterable @change="handleGroupChange">
-              <el-option
-                v-for="group in groupOptions"
-                :key="group.attrGroupId"
-                :label="group.attrGroupName"
-                :value="String(group.attrGroupId)">
-              </el-option>
-            </el-select>
           </el-form-item>
           <el-form-item label="快速展示" prop="showDesc">
             <el-switch v-model="attrForm.showDesc" :active-value="1" :inactive-value="0" />
@@ -169,16 +173,13 @@ export default {
         searchType: 1,
         attrType: 0,
         valueSelect: '',
-        attrGroupId: null,
-        attrGroupName: '',
         icon: '',
         showDesc: 0
       },
-      groupOptions: [],
       valueList: [],
       inputValue: '',
       attrRules: {
-        attrName: [{ required: true, message: '请输入参数名', trigger: 'blur' }]
+        attrName: [{ required: true, message: '请输入属性名', trigger: 'blur' }]
       }
     }
   },
@@ -187,15 +188,13 @@ export default {
       this.selectedCategory = node
       this.page = 1
       this.getAttrList()
-      // 只在需要时获取分组选项（新增/编辑时）
-      // 移除自动获取，减少不必要的请求
     },
     async getAttrList () {
       if (!this.selectedCategory) return
       this.loading = true
       try {
         const { data } = await http({
-          url: http.adornUrl('/product/attr/spec/list'),
+          url: http.adornUrl('/product/attr/sale/list'),
           method: 'get',
           params: http.adornParams({
             page: this.page,
@@ -207,7 +206,7 @@ export default {
         })
         if (data && data.code === 0) {
           const list = (data.data && data.data.list) || []
-          // 转换数据类型，只对字符串类型的字段进行转换
+          // 转换数据类型
           this.attrList = list.map(item => ({
             ...item,
             enable: typeof item.enable === 'string' ? parseInt(item.enable) || 0 : item.enable,
@@ -227,18 +226,13 @@ export default {
     handleCurrentChange (v) { this.page = v; this.getAttrList() },
     addAttr () {
       this.isEdit = false
-      this.dialogTitle = '新增规格参数'
+      this.dialogTitle = '新增销售属性'
       this.dialogVisible = true
       this.resetForm()
-      this.initValueList()
-      // 只在需要时获取分组选项
-      if (this.groupOptions.length === 0) {
-        this.getGroupOptions()
-      }
     },
     async editAttr (row) {
       this.isEdit = true
-      this.dialogTitle = '编辑规格参数'
+      this.dialogTitle = '编辑销售属性'
       this.dialogVisible = true
       // 确保字段名映射正确，并转换数据类型
       this.attrForm = {
@@ -247,42 +241,36 @@ export default {
         searchType: typeof row.searchType === 'string' ? parseInt(row.searchType) || 1 : row.searchType,
         attrType: typeof row.attrType === 'string' ? parseInt(row.attrType) || 0 : row.attrType,
         valueSelect: row.valueSelect || '',
-        attrGroupId: row.attrGroupId != null ? String(row.attrGroupId) : null,
-        attrGroupName: row.attrGroupName || '',
         icon: row.icon || '',
         showDesc: typeof row.showDesc === 'string' ? parseInt(row.showDesc) || 0 : row.showDesc
       }
       this.initValueList()
-      // 编辑时必须确保分组选项已加载，用于回显
-      await this.getGroupOptions()
-      // 若后端列表没有返回 attrGroupId，但返回了 attrGroupName，则通过名称匹配ID回填
-      if (!this.attrForm.attrGroupId && this.attrForm.attrGroupName) {
-        const targetName = String(this.attrForm.attrGroupName).trim().toLowerCase()
-        const match = this.groupOptions.find(g => String(g.attrGroupName).trim().toLowerCase() === targetName)
-        if (match) {
-          this.attrForm.attrGroupId = String(match.attrGroupId)
-        }
-      }
     },
     async deleteAttr (row) {
-      await http({ url: http.adornUrl(`/product/attr/spec/delete/${row.attrId}`), method: 'post' })
+      await http({ url: http.adornUrl(`/product/attr/sale/delete/${row.attrId}`), method: 'post' })
       this.$message.success('删除成功'); this.getAttrList()
     },
     async batchDelete () {
-      await http({ url: http.adornUrl('/product/attr/spec/delete'), method: 'post', data: http.adornData(this.selectedIds) })
+      await http({ url: http.adornUrl('/product/attr/sale/delete'), method: 'post', data: http.adornData(this.selectedIds) })
       this.$message.success('批量删除成功'); this.getAttrList()
+    },
+    async updateEnable (row) {
+      await http({
+        url: http.adornUrl('/product/attr/sale/updateEnable'),
+        method: 'post',
+        data: http.adornData({ attrId: row.attrId, enable: row.enable })
+      })
+      this.$message.success('状态更新成功')
     },
     async submitForm () {
       this.$refs.attrForm.validate(async (valid) => {
         if (!valid) return
         this.submitLoading = true
         try {
-          const url = this.isEdit ? '/product/attr/spec/update' : '/product/attr/spec/save'
+          const url = this.isEdit ? '/product/attr/sale/update' : '/product/attr/sale/save'
           const payload = {
             ...this.attrForm,
-            categoryId: this.selectedCategory ? this.selectedCategory.catId : null,
-            // 提交给后端前确保为数字
-            attrGroupId: this.attrForm.attrGroupId != null ? this.attrForm.attrGroupId : null
+            categoryId: this.selectedCategory ? this.selectedCategory.catId : null
           }
           const { data } = await http({ url: http.adornUrl(url), method: 'post', data: http.adornData(payload) })
           if (data && data.code === 0) {
@@ -293,101 +281,44 @@ export default {
         } finally { this.submitLoading = false }
       })
     },
-    toggleEnable (row) {
-      http({ url: http.adornUrl('/product/attr/spec/updateEnable'), method: 'post', data: http.adornData({ attrId: row.attrId, enable: row.enable }) })
-    },
     resetForm () {
-      this.attrForm = { attrId: null, attrName: '', searchType: 1, attrType: 0, valueSelect: '', attrGroupId: null, attrGroupName: '', icon: '', showDesc: 0 }
+      this.attrForm = { attrId: null, attrName: '', searchType: 1, attrType: 0, valueSelect: '', icon: '', showDesc: 0 }
       this.valueList = []
       this.inputValue = ''
     },
-    async getGroupOptions () {
-      if (!this.selectedCategory) return
-      try {
-        const { data } = await http({
-          url: http.adornUrl('/product/attrgroup/list'),
-          method: 'get',
-          params: http.adornParams({
-            categoryId: this.selectedCategory.catId,
-            limit: 1000
-          })
-        })
-        if (data && data.code === 0) {
-          this.groupOptions = (data.data && data.data.list) || []
-          // 如果当前在编辑，且服务器返回了分组选项，确保回显
-          if (this.isEdit && this.attrForm.attrGroupId) {
-            const exist = this.groupOptions.some(g => String(g.attrGroupId) === this.attrForm.attrGroupId)
-            if (!exist) {
-              // 分组选项中没有当前值时，清空以避免显示异常
-              this.attrForm.attrGroupId = null
-              this.attrForm.attrGroupName = ''
-            }
-          }
-        }
-      } catch (error) {
-        console.error('获取分组列表失败:', error)
-      }
+    handleDialogClose () {
+      this.resetForm()
     },
-    handleGroupChange (groupId) {
-      const group = this.groupOptions.find(g => String(g.attrGroupId) === String(groupId))
-      this.attrForm.attrGroupName = group ? group.attrGroupName : ''
-      // 同步保存字符串ID，确保下拉回显
-      this.attrForm.attrGroupId = group ? String(group.attrGroupId) : null
+    initValueList () {
+      this.valueList = this.attrForm.valueSelect ? this.attrForm.valueSelect.split(',') : []
     },
     addValue () {
       if (this.inputValue.trim()) {
-        if (!this.valueList.includes(this.inputValue.trim())) {
-          this.valueList.push(this.inputValue.trim())
-          this.updateValueSelect()
-        }
+        this.valueList.push(this.inputValue.trim())
+        this.attrForm.valueSelect = this.valueList.join(',')
         this.inputValue = ''
       }
     },
     removeValue (index) {
       this.valueList.splice(index, 1)
-      this.updateValueSelect()
-    },
-    updateValueSelect () {
       this.attrForm.valueSelect = this.valueList.join(',')
     },
-    initValueList () {
-      if (this.attrForm.valueSelect) {
-        this.valueList = this.attrForm.valueSelect.split(',').filter(v => v.trim())
-      } else {
-        this.valueList = []
-      }
+    onIconUploadSuccess (url) {
+      this.attrForm.icon = url
     },
-    handleDialogClose () {
-      this.$refs.attrForm.resetFields()
-      this.resetForm()
-    },
-    onIconUploadSuccess (data) {
-      console.log('图标上传成功:', data.url)
-    },
-    onIconUploadError (error) {
-      console.error('图标上传失败:', error)
+    onIconUploadError () {
+      this.$message.error('图标上传失败')
     },
     getValueList (valueSelect) {
-      if (!valueSelect) return []
-      return valueSelect.split(',').filter(v => v.trim())
+      return valueSelect ? valueSelect.split(',') : []
     },
     getValueGridStyle (valueSelect) {
-      const list = this.getValueList(valueSelect)
-      const count = list.length
-      // 默认三列
-      let columns = 3
-      // 当总数>3且对3取余为1时，用2列更均衡（例如4=2+2，7=3+2+2 等）
-      if (count > 3 && count % 3 === 1) {
-        columns = 2
-      }
+      const values = this.getValueList(valueSelect)
+      const cols = Math.ceil(Math.sqrt(values.length))
       return {
         display: 'grid',
-        gridTemplateColumns: `repeat(${columns}, max-content)`,
-        justifyContent: 'center',
-        alignItems: 'center',
-        columnGap: '6px',
-        rowGap: '6px',
-        width: '100%'
+        gridTemplateColumns: `repeat(${cols}, 1fr)`,
+        gap: '4px'
       }
     }
   }
@@ -395,116 +326,79 @@ export default {
 </script>
 
 <style scoped>
-.attr-spec-container {
+.attr-sale-container {
   display: flex;
   height: 100vh;
-  background: #f5f5f5;
-}
-.left-panel { width: 300px; background: #fff; border-right: 1px solid #e6e6e6; }
-.right-panel { flex: 1; background: #fff; display: flex; flex-direction: column; overflow: hidden; }
-.content-header { display: flex; align-items: center; padding: 6px 16px; border-bottom: 1px solid #e6e6e6; background: #f5f5f5; }
-.content-title { font-size: 14px; font-weight: 500; color: #333; }
-.operation-container { padding: 4px 20px; border-bottom: 1px solid #e6e6e6; background: #fff; }
-.attr-icon { border-radius: 4px; display: block; margin: 0 auto; }
-
-/* 表头不换行，避免两个字被拆成两行 */
-::v-deep(.el-table th .cell) {
-  white-space: nowrap;
 }
 
-/* 简化样式 - 让Element UI的align="center"生效 */
-::v-deep(.el-table th .cell) {
-  white-space: nowrap;
-}
-::v-deep(.el-table td .cell) { 
-  white-space: nowrap;
+.left-panel {
+  width: 300px;
+  border-right: 1px solid #e6e6e6;
 }
 
-/* 可选值标签容器 - 强制居中 */
-::v-deep(.el-table .value-select-display) {
+.right-panel {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.content-header {
+  margin-bottom: 20px;
+}
+
+.content-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+}
+
+.operation-container {
+  margin-bottom: 20px;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
   align-items: center;
-  gap: 2px;
+}
+
+.pagination-container {
+  margin-top: 20px;
+  text-align: right;
+}
+
+.value-input-container {
   width: 100%;
-  text-align: center;
-  margin: 0 auto;
-}
-
-/* 确保可选值列的内容居中 */
-::v-deep(.el-table td .cell) {
-  text-align: center !important;
-}
-
-/* 可选值列表样式 */
-.value-select-container {
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
-  padding: 8px;
-  min-height: 40px;
-  background-color: #fff;
 }
 
 .value-tags {
-  margin-bottom: 8px;
-  min-height: 24px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .value-tag {
-  margin-right: 8px;
-  margin-bottom: 4px;
+  margin: 0;
 }
 
 .value-input {
   width: 100%;
 }
 
-.value-input .el-input__inner {
-  border: none;
-  box-shadow: none;
-  padding-left: 0;
-}
-
-.value-input .el-input__inner:focus {
-  border: none;
-  box-shadow: none;
-}
-
-/* 字段提示样式 */
-.field-tip {
-  margin-left: 10px;
-  font-size: 12px;
-  color: #999;
-}
-
-/* 可选值列：单元格强制居中（避免文本流影响） */
-::v-deep(.el-table .col-value-select .cell) {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-/* 可选值显示样式 */
 .value-select-display {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  max-width: 170px;
-  line-height: 1;
-  margin: 0 auto;
+  display: grid;
+  gap: 4px;
 }
 
 .value-tag-mini {
   margin: 0;
-  font-size: 10px;
-  padding: 0 6px;
-  height: 18px;
-  line-height: 18px;
-  margin-bottom: 0px;
-  max-width: 100%;
-  word-break: break-all;
+  font-size: 12px;
+}
+
+.field-tip {
+  margin-left: 10px;
+  color: #999;
+  font-size: 12px;
+}
+
+.col-value-select {
+  max-width: 200px;
 }
 </style>
-
-
