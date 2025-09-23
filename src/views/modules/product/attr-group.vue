@@ -167,10 +167,16 @@
 
     <!-- 关联属性对话框 -->
     <el-dialog
-      title="关联属性"
+      :title="`关联属性 - ${currentAttrGroup ? currentAttrGroup.attrGroupName : ''}`"
       :visible.sync="attrRelationDialogVisible"
       width="800px"
       @close="handleAttrRelationDialogClose">
+      <div v-if="currentAttrGroup" class="relation-header-tip">
+        <span>当前分组：</span>
+        <el-tag size="mini" type="info" style="margin-right: 8px;">{{ currentAttrGroup.attrGroupName }}</el-tag>
+        <span>所属分类：</span>
+        <el-tag size="mini">{{ categoryName }}</el-tag>
+      </div>
       <div class="attr-relation-container">
         <!-- 已关联的属性 -->
         <div class="related-attr-section">
@@ -602,19 +608,19 @@ export default {
       this.attrLoading = true
       try {
         const response = await http({
-          url: http.adornUrl('/product/attr/list'),
-          method: 'get',
-          params: http.adornParams({
-            categoryId: this.currentAttrGroup.categoryId,
-            attrType: 1 // 只获取基本属性
-          })
+          url: http.adornUrl(`/product/attr/unrelated/${this.currentAttrGroup.attrGroupId}`),
+          method: 'get'
         })
 
         if (response.data && response.data.code === 0) {
-          const allAttrs = response.data.data.list || []
-          // 过滤掉已关联的属性
-          const relatedAttrIds = this.relatedAttrs.map(attr => attr.attrId)
-          this.availableAttrs = allAttrs.filter(attr => !relatedAttrIds.includes(attr.attrId))
+          const list = response.data.data || []
+          // 统一字段类型，避免 === 判断失真
+          this.availableAttrs = list.map(item => ({
+            ...item,
+            enable: typeof item.enable === 'string' ? parseInt(item.enable) || 0 : item.enable,
+            searchType: typeof item.searchType === 'string' ? parseInt(item.searchType) || 0 : item.searchType,
+            attrType: typeof item.attrType === 'string' ? parseInt(item.attrType) || 0 : item.attrType
+          }))
         } else {
           this.availableAttrs = []
         }
@@ -713,6 +719,16 @@ export default {
   display: flex;
   height: 100vh;
   background: #f5f5f5;
+}
+
+.relation-header-tip {
+  padding: 6px 8px;
+  background: #f9fafc;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  color: #606266;
+  font-size: 12px;
 }
 
 .left-panel {
