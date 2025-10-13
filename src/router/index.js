@@ -35,6 +35,14 @@ const mainRoutes = {
     // 提示: 如需要通过iframe嵌套展示内容, 但不通过tab打开, 请自行创建组件使用iframe处理!
     { path: '/home', component: _import('common/home'), name: 'home', meta: { title: '首页' } },
     { path: '/theme', component: _import('common/theme'), name: 'theme', meta: { title: '主题' } },
+    // 手动注册的业务路由（避免依赖后台菜单也能直达）
+    { path: '/member-level', component: _import('modules/member/level'), name: 'member-level', meta: { title: '会员等级', isTab: true } },
+    { path: '/spu-add', component: _import('modules/product/spu-add'), name: 'spu-add', meta: { title: '发布商品', isTab: true } },
+    { path: '/spu', component: _import('modules/product/spu'), name: 'spu', meta: { title: 'SPU管理', isTab: true } },
+    { path: '/spu-spec/:id', component: _import('modules/product/spu-spec'), name: 'spu-spec', meta: { title: 'SPU规格', isTab: true } },
+    { path: '/product-sku', component: _import('modules/product/sku'), name: 'product-sku', meta: { title: 'SKU管理', isTab: true } },
+    { path: '/ware-info', component: _import('modules/ware/ware-info'), name: 'ware-info', meta: { title: '仓库维护', isTab: true } },
+    { path: '/ware-sku', component: _import('modules/ware/ware-sku'), name: 'ware-sku', meta: { title: '商品库存', isTab: true } },
     { path: '/demo-echarts', component: _import('demo/echarts'), name: 'demo-echarts', meta: { title: 'demo-echarts', isTab: true } },
     { path: '/demo-ueditor', component: _import('demo/ueditor'), name: 'demo-ueditor', meta: { title: 'demo-ueditor', isTab: true } }
   ],
