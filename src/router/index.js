@@ -43,6 +43,10 @@ const mainRoutes = {
     { path: '/product-sku', component: _import('modules/product/sku'), name: 'product-sku', meta: { title: 'SKU管理', isTab: true } },
     { path: '/ware-info', component: _import('modules/ware/ware-info'), name: 'ware-info', meta: { title: '仓库维护', isTab: true } },
     { path: '/ware-sku', component: _import('modules/ware/ware-sku'), name: 'ware-sku', meta: { title: '商品库存', isTab: true } },
+    { path: '/purchase', component: _import('modules/ware/purchase'), name: 'purchase', meta: { title: '采购单', isTab: true } },
+    { path: '/purchase-detail', component: _import('modules/ware/purchasedetail'), name: 'purchase-detail', meta: { title: '采购需求', isTab: true } },
+    { path: '/ware-purchase', component: _import('modules/ware/purchase'), name: 'ware-purchase', meta: { title: '采购单', isTab: true } },
+    { path: '/ware-purchaseitem', component: _import('modules/ware/purchasedetail'), name: 'ware-purchaseitem', meta: { title: '采购需求', isTab: true } },
     { path: '/demo-echarts', component: _import('demo/echarts'), name: 'demo-echarts', meta: { title: 'demo-echarts', isTab: true } },
     { path: '/demo-ueditor', component: _import('demo/ueditor'), name: 'demo-ueditor', meta: { title: 'demo-ueditor', isTab: true } }
   ],
