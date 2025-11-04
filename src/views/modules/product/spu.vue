@@ -233,9 +233,8 @@ export default {
         type: 'warning'
       }).then(() => {
         http({
-          url: http.adornUrl('/product/spuinfo/publish'),
-          method: 'post',
-          data: http.adornData([id])
+          url: http.adornUrl(`/product/spuinfo/${id}/up`),
+          method: 'post'
         }).then(({ data }) => {
           if (data && data.code === 0) {
             this.$message({
