@@ -1,8 +1,9 @@
-# mall-admin-front 是 Vue2.5.16 + Webpack3.6 + Babel6 这套 2017 年代的老工具链，
-# package.json 声明 node >= 8.11.1；用新版 Node 直接 npm run build 大概率会踩到
-# OpenSSL3/webpack3 的已知兼容性问题（"error:0308010C:digital envelope routines"），
-# 所以构建阶段特意钉住 node:8，只在这一层用，最终镜像不带它。
-FROM node:8-alpine AS build
+# package.json 声明 node >= 8.11.1（Vue2.5.16+Webpack3.6+Babel6 那套 2017 年的老工具链），
+# 但实测用 node:8 构建会失败：package.json 里的 sass（Dart Sass ^1.32.0，不是老式的
+# node-sass）编译产物用了 globalThis，这是 Node 12+ 才有的东西，Node 8 里
+# "ReferenceError: globalThis is not defined"。反而是新版 Node 没问题——本地用 Node 18
+# 跑 npm run build 完全正常，所以构建阶段用 node:18，不用 package.json 声明的最低版本。
+FROM node:18-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
