@@ -2,13 +2,10 @@
   <div>
     <el-upload
       ref="upload"
-      :action="uploadUrl"
-      :headers="uploadHeaders"
-      :data="uploadData"
+      action="#"
+      :http-request="doUpload"
       :before-upload="beforeUpload"
-      :on-success="onSuccess"
       :on-error="onError"
-      :on-progress="onProgress"
       :show-file-list="showFile"
       :list-type="listType"
       :file-list="fileList"
@@ -27,7 +24,7 @@
 </template>
 
 <script>
-import http from '@/utils/httpRequest'
+import { presignAndPut } from '@/utils/objectStorage'
 
 export default {
   name: 'MultiUpload',
@@ -40,9 +37,9 @@ export default {
   },
   data () {
     return {
-      uploadUrl: 'https://mall-cd.oss-cn-chengdu.aliyuncs.com',
-      uploadHeaders: {},
-      uploadData: {},
+      // 原来这里硬编码了 https://mall-cd.oss-cn-chengdu.aliyuncs.com ——
+      // 把 bucket 名和云厂商域名钉死在前端代码里，换环境就要改代码重新构建。
+      // 现在上传地址完全由后端的预签名接口给出，前端不需要知道存储在哪。
       dialogVisible: false,
       dialogImageUrl: null
     }
@@ -77,85 +74,34 @@ export default {
       this.$message({ message: '最多只能上传' + this.maxCount + '张图片', type: 'warning', duration: 1000 })
     },
     beforeUpload (file) {
-      console.log('[multiUpload] beforeUpload 被调用，文件:', file && file.name)
-
-      const isImage = file.type.startsWith('image/')
-      if (!isImage) {
+      if (!file.type.startsWith('image/')) {
         this.$message.error('只能上传图片文件!')
         return false
       }
-
-      return this.getOssToken(file).then(() => {
-        console.log('[multiUpload] OSS token获取成功，开始上传')
-        return true
-      }).catch(error => {
-        console.error('[multiUpload] OSS token获取失败:', error)
-        this.$message.error('获取上传凭证失败')
-        return false
-      })
+      return true
     },
-    onSuccess (response, file, fileList) {
-      console.log('[multiUpload] onSuccess被调用! 响应:', response)
 
-      // 仅回写OSS的公网可访问地址，禁止使用本地blob
-      let imageUrl = ''
-      if (response && response.Location) {
-        imageUrl = response.Location
-        console.log('[multiUpload] 从Location获取URL:', imageUrl)
-      } else {
-        imageUrl = this.uploadUrl + '/' + this.uploadData.key
-        console.log('[multiUpload] 备用方案拼接URL:', imageUrl)
+    // 自定义上传：向后端要预签名地址，再把文件直接 PUT 到对象存储。
+    // 原来是「beforeUpload 里先去取 policy，再让 el-upload 发表单 POST」——
+    // 那种两段式还有个隐患：取回来的 policy/key 存在组件的 this 上，
+    // 多个文件并发上传时后一个会覆盖前一个的 key，导致两个文件传到同一个对象上。
+    // 现在每次上传的预签名地址都是这次调用的局部变量，并发天然安全。
+    async doUpload ({ file, onProgress }) {
+      try {
+        const { url } = await presignAndPut(file, { onProgress })
+        const current = Array.isArray(this.value) ? this.value.slice() : []
+        if (!current.includes(url)) current.push(url)
+        this.emitInput(current)
+        this.$message.success('上传成功')
+      } catch (e) {
+        console.error('[multiUpload] 上传失败:', e)
+        this.$message.error(e.message || '上传失败')
       }
-
-      // 合并去重
-      const current = Array.isArray(this.value) ? this.value.slice() : []
-      if (!current.includes(imageUrl)) current.push(imageUrl)
-      console.log('[multiUpload] 最终图片URL列表:', current)
-      this.emitInput(current)
-      this.$message.success('上传成功')
     },
+
     onError (error, file) {
       console.error('[multiUpload] 上传失败:', error)
       this.$message.error('上传失败: ' + (error.message || '未知错误'))
-    },
-    onProgress (event, file) {
-      console.log('[multiUpload] 上传进度:', event.percent + '%')
-    },
-    getOssToken (file) {
-      return new Promise((resolve, reject) => {
-        http({
-          url: http.adornUrl('/thirdparty/oss/policy'),
-          method: 'get'
-        }).then(response => {
-          if (response.data && response.data.code === 0) {
-            const ossData = response.data.data
-            this.uploadUrl = ossData.host
-
-            const cleanDir = ossData.dir ? ossData.dir.trim() : ''
-            const fileName = this.generateFileName(file)
-            const key = cleanDir + fileName
-
-            this.uploadData = {
-              key: key,
-              policy: ossData.policy,
-              OSSAccessKeyId: ossData.accessKeyId,
-              signature: ossData.signature,
-              success_action_status: '201'
-            }
-
-            console.log('[multiUpload] OSS参数设置完成:', {
-              url: this.uploadUrl,
-              key: key
-            })
-            resolve()
-          } else {
-            reject(new Error('获取OSS策略失败'))
-          }
-        }).catch(error => {
-          console.error('[multiUpload] 获取OSS策略失败:', error)
-          reject(error)
-        })
-      })
     },
     generateFileName (file) {
       const timestamp = Date.now()

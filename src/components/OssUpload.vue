@@ -2,11 +2,9 @@
   <div class="oss-upload">
     <el-upload
       ref="upload"
-      :action="uploadUrl"
-      :headers="uploadHeaders"
-      :data="uploadData"
+      action="#"
+      :http-request="doUpload"
       :before-upload="beforeUpload"
-      :on-success="onSuccess"
       :on-error="onError"
       :on-progress="onProgress"
       :show-file-list="false"
@@ -45,7 +43,7 @@
 </template>
 
 <script>
-import http from '@/utils/httpRequest'
+import { presignAndPut } from '@/utils/objectStorage'
 
 export default {
   name: 'OssUpload',
@@ -108,9 +106,6 @@ export default {
   },
   data () {
     return {
-      uploadUrl: '', // OSS上传地址
-      uploadHeaders: {}, // 上传请求头
-      uploadData: {}, // 上传额外参数
       uploading: false, // 是否正在上传
       fileUrl: this.value, // 文件URL
       currentFile: null // 当前上传的文件对象
@@ -125,142 +120,46 @@ export default {
     }
   },
   methods: {
-    // 上传前处理
-    async beforeUpload (file) {
-      // 保存当前文件对象
-      this.currentFile = file
-
-      // 检查文件大小
+    // 上传前的本地校验。
+    //
+    // 注意这里的大小检查【只是体验优化】，不是安全边界：
+    // 预签名 PUT 无法把大小限制签进签名里（不像 OSS 的 PostObject policy 有
+    // content-length-range），绕过前端直接 PUT 一个大文件是可行的。
+    // 真正的限制要放在 bucket policy 或网关上，目前还没做。
+    beforeUpload (file) {
       const isLtMaxSize = file.size / 1024 / 1024 < this.maxSize
       if (!isLtMaxSize) {
         this.$message.error(`文件大小不能超过 ${this.maxSize}MB!`)
         return false
       }
-
-      // 检查文件类型
-      const isImage = file.type.startsWith('image/')
-      if (!isImage) {
+      if (!file.type.startsWith('image/')) {
         this.$message.error('只能上传图片文件!')
         return false
       }
-
       this.uploading = true
+      return true
+    },
 
+    // 自定义上传：向后端要预签名地址，再把文件直接 PUT 到对象存储。
+    // 用 :http-request 覆盖 el-upload 默认的表单 POST —— S3 的预签名是 PUT，
+    // 表单 POST 那套（policy/signature/OSSAccessKeyId 字段）已经不适用了。
+    async doUpload ({ file, onProgress }) {
       try {
-        // 获取OSS上传token
-        await this.getOssToken()
-        return true
-      } catch (error) {
+        const { url } = await presignAndPut(file, { onProgress })
         this.uploading = false
-        this.$message.error('获取上传凭证失败')
-        return false
-      }
-    },
-
-    // 获取OSS上传token
-    async getOssToken () {
-      try {
-        const response = await http({
-          url: http.adornUrl('/thirdparty/oss/policy'),
-          method: 'get'
-        })
-
-        if (response.data && response.data.code === 0) {
-          const ossData = response.data.data
-          this.uploadUrl = ossData.host
-
-          // 调试：打印OSS数据
-          console.log('OSS数据:', ossData)
-          console.log('OSS dir:', ossData.dir)
-          console.log('生成的文件名:', this.generateFileName(this.currentFile))
-
-          // 确保dir没有空格，并正确拼接文件名
-          const cleanDir = ossData.dir ? ossData.dir.trim() : ''
-          const fileName = this.generateFileName(this.currentFile)
-          const key = cleanDir + fileName
-
-          this.uploadData = {
-            key: key,
-            policy: ossData.policy,
-            OSSAccessKeyId: ossData.accessKeyId,
-            signature: ossData.signature,
-            success_action_status: '201'
-          }
-          // 调试：打印生成的key
-          console.log('生成的OSS key:', this.uploadData.key)
-        } else {
-          throw new Error(response.data.msg || '获取上传凭证失败')
-        }
-      } catch (error) {
-        console.error('获取OSS token失败:', error)
-        throw error
-      }
-    },
-
-    // 生成文件名
-    generateFileName (file) {
-      const timestamp = Date.now()
-      const random = Math.floor(Math.random() * 1000)
-      const uuid = this.generateUUID()
-      const extension = file ? file.name.split('.').pop() : 'jpg'
-      // 确保所有部分都是字符串，避免空格
-      const fileName = `${timestamp}_${random}_${uuid}.${extension}`
-      console.log('生成的文件名:', fileName)
-      return fileName
-    },
-
-    // 生成UUID
-    generateUUID () {
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        const r = Math.random() * 16 | 0
-        const v = c === 'x' ? r : (r & 0x3 | 0x8)
-        return v.toString(16)
-      })
-    },
-
-    // 上传成功
-    onSuccess (response, file) {
-      this.uploading = false
-
-      console.log('OSS上传响应:', response) // 调试用
-
-      // 阿里云OSS返回的是XML格式，Element UI会自动解析
-      // 检查响应中是否包含Location字段
-      if (response && (response.Location || response.location)) {
-        // 直接使用返回的Location作为文件URL
-        const fileUrl = response.Location || response.location
-        this.fileUrl = fileUrl
-
-        // 触发v-model更新
-        this.$emit('input', fileUrl)
-
-        // 触发成功事件
-        this.$emit('success', {
-          url: fileUrl,
-          file: file
-        })
-
+        this.fileUrl = url
+        this.$emit('input', url)
+        this.$emit('success', { url, file })
         this.$message.success('上传成功')
-      } else {
-        // 如果没有Location，尝试构建URL
-        if (this.uploadData && this.uploadData.key) {
-          // 直接使用key构建URL，不进行URL编码（因为OSS已经处理了）
-          const fileUrl = this.uploadUrl + '/' + this.uploadData.key
-          console.log('构建的URL:', fileUrl)
-          this.fileUrl = fileUrl
-          this.$emit('input', fileUrl)
-          this.$emit('success', {
-            url: fileUrl,
-            file: file
-          })
-          this.$message.success('上传成功')
-        } else {
-          this.$message.error('上传失败')
-          this.$emit('error', response)
-        }
+      } catch (e) {
+        this.uploading = false
+        // 把真实原因带出来。对象存储的失败（签名不匹配 / CORS / 权限）长得都一样，
+        // 只说"上传失败"的话没法判断该去改配置还是改代码。
+        console.error('上传失败:', e)
+        this.$message.error(e.message || '上传失败')
+        this.$emit('error', e)
       }
     },
-
     // 上传失败
     onError (error, file) {
       this.uploading = false
