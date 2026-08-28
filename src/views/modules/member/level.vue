@@ -203,13 +203,13 @@ export default {
     },
     async del (row) {
       await this.$confirm('确认删除该等级吗？', '提示', { type: 'warning' })
-      await http({ url: http.adornUrl('/member/memberlevel/delete'), method: 'post', data: http.adornData([row.id]) })
+      await http({ url: http.adornUrl('/member/memberlevel/delete'), method: 'post', data: http.adornData([row.id], false) })
       this.$message.success('删除成功'); this.fetchList()
     },
     async batchDel () {
       if (this.ids.length === 0) return
       await this.$confirm(`确认删除选中的 ${this.ids.length} 条记录吗？`, '提示', { type: 'warning' })
-      await http({ url: http.adornUrl('/member/memberlevel/delete'), method: 'post', data: http.adornData(this.ids) })
+      await http({ url: http.adornUrl('/member/memberlevel/delete'), method: 'post', data: http.adornData(this.ids, false) })
       this.$message.success('删除成功'); this.fetchList()
     }
   }

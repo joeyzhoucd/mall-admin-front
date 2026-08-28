@@ -269,7 +269,7 @@ export default {
       this.$message.success('删除成功'); this.getAttrList()
     },
     async batchDelete () {
-      await http({ url: http.adornUrl('/product/attr/spec/delete'), method: 'post', data: http.adornData(this.selectedIds) })
+      await http({ url: http.adornUrl('/product/attr/spec/delete'), method: 'post', data: http.adornData(this.selectedIds, false) })
       this.$message.success('批量删除成功'); this.getAttrList()
     },
     async submitForm () {

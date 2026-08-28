@@ -289,7 +289,7 @@ export default {
     },
     deleteHandle (skuId) {
       this.$confirm(`确定删除SKU[${skuId}]?`, '提示', { type: 'warning' }).then(() => {
-        http({ url: http.adornUrl('/product/skuinfo/delete'), method: 'post', data: http.adornData([skuId]) })
+        http({ url: http.adornUrl('/product/skuinfo/delete'), method: 'post', data: http.adornData([skuId], false) })
           .then(({ data }) => {
             if (data && data.code === 0) { this.$message.success('删除成功'); this.getDataList() } else { this.$message.error(data.msg) }
           })
@@ -433,7 +433,7 @@ export default {
       if (this.dataListSelections.length === 0) return
       this.$confirm(`确定删除选中的 ${this.dataListSelections.length} 个SKU?`, '提示', { type: 'warning' }).then(() => {
         const skuIds = this.dataListSelections.map(item => item.skuId)
-        http({ url: http.adornUrl('/product/skuinfo/delete'), method: 'post', data: http.adornData(skuIds) })
+        http({ url: http.adornUrl('/product/skuinfo/delete'), method: 'post', data: http.adornData(skuIds, false) })
           .then(({ data }) => {
             if (data && data.code === 0) { this.$message.success('批量删除成功'); this.getDataList() } else { this.$message.error(data.msg) }
           })

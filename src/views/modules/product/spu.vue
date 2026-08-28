@@ -261,7 +261,7 @@ export default {
         http({
           url: http.adornUrl('/product/spuinfo/unpublish'),
           method: 'post',
-          data: http.adornData([id])
+          data: http.adornData([id], false)
         }).then(({ data }) => {
           if (data && data.code === 0) {
             this.$message({
@@ -292,7 +292,7 @@ export default {
         http({
           url: http.adornUrl('/product/spuinfo/delete'),
           method: 'post',
-          data: http.adornData([id])
+          data: http.adornData([id], false)
         }).then(({ data }) => {
           if (data && data.code === 0) {
             this.$message({

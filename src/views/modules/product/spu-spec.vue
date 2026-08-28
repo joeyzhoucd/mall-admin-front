@@ -134,7 +134,7 @@ export default {
         http({
           url: http.adornUrl('/product/skuinfo/delete'),
           method: 'post',
-          data: http.adornData([skuId])
+          data: http.adornData([skuId], false)
         }).then(({ data }) => {
           if (data && data.code === 0) {
             this.$message.success('删除成功')
