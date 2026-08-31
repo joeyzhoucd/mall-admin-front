@@ -3,131 +3,120 @@
     title="云存储配置"
     :close-on-click-modal="false"
     :visible.sync="visible">
-    <el-form :model="dataForm" :rules="dataRule" ref="dataForm" @keyup.enter.native="dataFormSubmit()" label-width="120px">
-      <el-form-item size="mini" label="存储类型">
-        <el-radio-group v-model="dataForm.type">
-          <el-radio :label="1">七牛</el-radio>
-          <el-radio :label="2">阿里云</el-radio>
-          <el-radio :label="3">腾讯云</el-radio>
-        </el-radio-group>
-      </el-form-item>
-      <template v-if="dataForm.type === 1">
-        <el-form-item size="mini">
-          <a href="#" target="_blank">免费申请(七牛)10GB储存空间</a>
-        </el-form-item>
-        <el-form-item label="域名">
-          <el-input v-model="dataForm.qiniuDomain" placeholder="七牛绑定的域名"></el-input>
-        </el-form-item>
-        <el-form-item label="路径前缀">
-          <el-input v-model="dataForm.qiniuPrefix" placeholder="不设置默认为空"></el-input>
-        </el-form-item>
-        <el-form-item label="AccessKey">
-          <el-input v-model="dataForm.qiniuAccessKey" placeholder="七牛AccessKey"></el-input>
-        </el-form-item>
-        <el-form-item label="SecretKey">
-          <el-input v-model="dataForm.qiniuSecretKey" placeholder="七牛SecretKey"></el-input>
-        </el-form-item>
-        <el-form-item label="空间名">
-          <el-input v-model="dataForm.qiniuBucketName" placeholder="七牛存储空间名"></el-input>
-        </el-form-item>
-      </template>
-      <template v-else-if="dataForm.type === 2">
-        <el-form-item label="域名">
-          <el-input v-model="dataForm.aliyunDomain" placeholder="阿里云绑定的域名"></el-input>
-        </el-form-item>
-        <el-form-item label="路径前缀">
-          <el-input v-model="dataForm.aliyunPrefix" placeholder="不设置默认为空"></el-input>
-        </el-form-item>
-        <el-form-item label="EndPoint">
-          <el-input v-model="dataForm.aliyunEndPoint" placeholder="阿里云EndPoint"></el-input>
-        </el-form-item>
-        <el-form-item label="AccessKeyId">
-          <el-input v-model="dataForm.aliyunAccessKeyId" placeholder="阿里云AccessKeyId"></el-input>
-        </el-form-item>
-        <el-form-item label="AccessKeySecret">
-          <el-input v-model="dataForm.aliyunAccessKeySecret" placeholder="阿里云AccessKeySecret"></el-input>
-        </el-form-item>
-        <el-form-item label="BucketName">
-          <el-input v-model="dataForm.aliyunBucketName" placeholder="阿里云BucketName"></el-input>
-        </el-form-item>
-      </template>
-      <template v-else-if="dataForm.type === 3">
-        <el-form-item label="域名">
-          <el-input v-model="dataForm.qcloudDomain" placeholder="腾讯云绑定的域名"></el-input>
-        </el-form-item>
-        <el-form-item label="路径前缀">
-          <el-input v-model="dataForm.qcloudPrefix" placeholder="不设置默认为空"></el-input>
-        </el-form-item>
-        <el-form-item label="AppId">
-          <el-input v-model="dataForm.qcloudAppId" placeholder="腾讯云AppId"></el-input>
-        </el-form-item>
-        <el-form-item label="SecretId">
-          <el-input v-model="dataForm.qcloudSecretId" placeholder="腾讯云SecretId"></el-input>
-        </el-form-item>
-        <el-form-item label="SecretKey">
-          <el-input v-model="dataForm.qcloudSecretKey" placeholder="腾讯云SecretKey"></el-input>
-        </el-form-item>
-        <el-form-item label="BucketName">
-          <el-input v-model="dataForm.qcloudBucketName" placeholder="腾讯云BucketName"></el-input>
-        </el-form-item>
-        <el-form-item label="Bucket所属地区">
-          <el-input v-model="dataForm.qcloudRegion" placeholder="如：sh（可选值 ，华南：gz 华北：tj 华东：sh）"></el-input>
-        </el-form-item>
-      </template>
-    </el-form>
+
+    <el-alert
+      type="info"
+      :closable="false"
+      show-icon
+      title="这个页面是只读的"
+      style="margin-bottom: 16px;">
+      <div>
+        存储凭据（AccessKey / SecretKey）不通过后台界面维护 —— 它们由 Sealed Secret
+        注入成环境变量，改配置是一次部署，不是一次点击。
+      </div>
+      <div style="margin-top: 6px;">
+        原来这里是一个能填七牛 / 阿里云 / 腾讯云 AccessKey+SecretKey 的表单、存进数据库。
+        那等于任何拿到后台账号的人都能读走或替换掉存储凭据；而且密钥进了数据库就会进备份、
+        进从库、进 binlog。所以对应的保存接口没有实现。
+      </div>
+    </el-alert>
+
+    <div v-if="loading" style="text-align:center;padding:20px;">加载中…</div>
+
+    <el-alert
+      v-else-if="!config"
+      type="warning"
+      :closable="false"
+      show-icon
+      title="取不到存储配置">
+      mall-thirdparty 可能不可用。这不影响已上传文件的浏览和删除，只是这里显示不出来。
+    </el-alert>
+
+    <table v-else class="cfg">
+      <tr v-for="row in rows" :key="row.k">
+        <th>{{ row.k }}</th>
+        <td>{{ row.v }}</td>
+      </tr>
+    </table>
+
     <span slot="footer" class="dialog-footer">
-      <el-button @click="visible = false">取消</el-button>
-      <el-button type="primary" @click="dataFormSubmit()">确定</el-button>
+      <el-button @click="visible = false">关闭</el-button>
     </span>
   </el-dialog>
 </template>
 
 <script>
+  import http from '@/utils/httpRequest'
+
   export default {
     data () {
       return {
         visible: false,
-        dataForm: {},
-        dataRule: {}
+        loading: false,
+        config: null
+      }
+    },
+    computed: {
+      rows () {
+        const c = this.config
+        if (!c) return []
+        const yesNo = (v) => (v ? '是' : '否')
+        return [
+          { k: '存储类型', v: c.provider },
+          { k: '端点 endpoint', v: c.endpoint },
+          { k: '区域 region', v: c.region },
+          { k: '存储桶 bucket', v: c.bucket },
+          // 这两项经常是排查问题的关键，所以显式列出来而不是藏起来：
+          // path-style 搞错的表现是 DNS 解析不到子域名或 404，都不指向配置本身。
+          { k: '路径风格访问', v: yesNo(c.pathStyleAccess) },
+          { k: '对外地址前缀', v: c.publicBaseUrl || '（未设置，按 endpoint 拼）' },
+          { k: '预签名有效期', v: `${c.presignExpireSeconds} 秒` },
+          { k: '允许的扩展名', v: (c.allowedExtensions || []).join(', ') },
+          // 只说明凭据在不在，不显示任何片段 —— 连前 4 位都不显示，
+          // AccessKeyId 的前缀本身就能透露云厂商和账号族。
+          { k: '凭据已注入', v: yesNo(c.credentialsConfigured) }
+        ]
       }
     },
     methods: {
-      init (id) {
+      init () {
         this.visible = true
-        this.$http({
-          url: this.$http.adornUrl('/sys/oss/config'),
+        this.loading = true
+        this.config = null
+        http({
+          url: http.adornUrl('/sys/oss/config'),
           method: 'get',
-          params: this.$http.adornParams()
-        }).then(({data}) => {
-          this.dataForm = data && data.code === 0 ? data.config : []
-        })
-      },
-      // 表单提交
-      dataFormSubmit () {
-        this.$refs['dataForm'].validate((valid) => {
-          if (valid) {
-            this.$http({
-              url: this.$http.adornUrl('/sys/oss/saveConfig'),
-              method: 'post',
-              data: this.$http.adornData(this.dataForm)
-            }).then(({data}) => {
-              if (data && data.code === 0) {
-                this.$message({
-                  message: '操作成功',
-                  type: 'success',
-                  duration: 1500,
-                  onClose: () => {
-                    this.visible = false
-                  }
-                })
-              } else {
-                this.$message.error(data.msg)
-              }
-            })
-          }
+          params: http.adornParams()
+        }).then(({ data }) => {
+          this.config = (data && data.code === 0) ? data.config : null
+          this.loading = false
+        }).catch(() => {
+          this.config = null
+          this.loading = false
         })
       }
     }
   }
 </script>
 
+<style scoped>
+  .cfg {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .cfg th, .cfg td {
+    border: 1px solid #ebeef5;
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 13px;
+  }
+  .cfg th {
+    width: 160px;
+    background: #fafafa;
+    font-weight: normal;
+    color: #606266;
+  }
+  .cfg td {
+    word-break: break-all;
+  }
+</style>
