@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mall 后台管理</title>
+
+    <!--
+      【这一行是部署契约，不能删】
+      运行时配置：window.SITE_CONFIG.baseUrl 指向后端网关的前缀。
+      它【不进 bundle】，而是构建后仍然可以单独替换的一个文件 ——
+      所以同一个镜像可以指向不同环境的后端，不需要为每个环境重新构建。
+      旧的 Vue 应用就是这么做的（index.html 里加载 ./static/config/index.js），
+      这里保持同样的约定，否则 P7 切换 Dockerfile 时部署方式会跟着变。
+
+      带时间戳是为了绕开浏览器缓存：配置改了要立刻生效，
+      而 index.html 本身通常也被缓存，所以只能靠查询串。
+      如果缓存住了旧配置，症状是「新部署的前端仍然打到旧后端」——很难想到是缓存。
+
+      【为什么是 document.write，不要"清理"成普通的 script 标签】
+      因为要保证它在应用代码【之前】执行。Vite 注入的入口是
+      <script type="module">，而 module 天然是 defer 的 —— 它在解析完成后才跑。
+      document.write 写入的是经典脚本，会阻塞解析并立即执行，所以顺序有保证。
+      改成动态创建 script 或加 defer，都会让 window.SITE_CONFIG 在应用启动时
+      可能还不存在，表现为间歇性白屏 + "运行时配置缺失"。
+    -->
+    <script>
+      document.write(
+        '<script src="./config/index.js?t=' + Date.now() + '"><\/script>'
+      )
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
