@@ -149,3 +149,62 @@ export async function request<T = ApiEnvelope>(
 export function captchaUrl(uuid: string): string {
   return buildUrl('/captcha.jpg', { uuid })
 }
+
+/**
+ * 取一个分页列表。
+ *
+ * <h3>为什么需要这个而不是直接用 request()</h3>
+ * <b>后端的分页容器键名不统一</b>，实测（2026-09-03，直连各服务）：
+ * <pre>
+ *   page 容器： product/spuinfo  product/skuinfo  coupon/coupon
+ *               coupon/seckillsession  ware/wareinfo  ware/waresku   ← 多数
+ *   data 容器： product/brand  product/category/list/tree             ← 少数
+ * </pre>
+ * 内层结构在所有接口上都一致（list / currPage / pageSize / totalCount / totalPage）。
+ * <p>
+ * 这个差异必须在这一层收敛。让每个页面各自处理的后果是：
+ * 抄了 brand 页写 category 页的人会读 data，而 spuinfo 返回的是 page，
+ * 于是列表<b>空着但不报错</b> —— 分不清是「没有数据」还是「读错了字段」。
+ * 这正是本项目反复出现的那种失败形状。
+ */
+export async function fetchPage<T>(
+  path: string,
+  query: Record<string, string | number | boolean | undefined | null>,
+  options: { signal?: AbortSignal } = {}
+): Promise<import('./types').PageResult<T>> {
+  const payload = await request<ApiEnvelope & {
+    page?: import('./types').PageResult<T>
+    data?: import('./types').PageResult<T>
+  }>(path, { query, signal: options.signal })
+
+  const container = payload.page ?? payload.data
+  if (!container || !Array.isArray(container.list)) {
+    // 两个键都没有 → 后端换了形状。显式报错而不是返回空列表：
+    // 空列表会被当成「没有数据」，而这是一个契约变更，必须有人知道。
+    throw new Error(
+      `${path} 的响应里既没有 page 也没有 data 容器（拿到的顶层键：` +
+        `${Object.keys(payload).join(', ')}）。后端的分页形状可能变了。`
+    )
+  }
+  return container
+}
+
+/**
+ * 取一个非分页的 data 负载（详情、树、下拉选项这类）。
+ *
+ * 同样有键名问题：详情接口多数用 data，但个别用别的名字。
+ * 这里允许调用方指定键名，默认 data。
+ */
+export async function fetchData<T>(
+  path: string,
+  options: { query?: RequestOptions['query']; key?: string; signal?: AbortSignal } = {}
+): Promise<T> {
+  const { query, key = 'data', signal } = options
+  const payload = await request<ApiEnvelope>(path, { query, signal })
+  if (!(key in payload)) {
+    throw new Error(
+      `${path} 的响应里没有 «${key}» 字段（拿到的顶层键：${Object.keys(payload).join(', ')}）`
+    )
+  }
+  return payload[key] as T
+}
