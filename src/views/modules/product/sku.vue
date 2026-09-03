@@ -168,6 +168,8 @@ export default {
       reductionModel: { fullPrice: 0, reducePrice: 0, priceStatus: 0 },
       // seckill
       seckillModel: { startTime: '', endTime: '', seckillPrice: 0, seckillCount: 0, seckillLimit: 1 },
+      // 保存成功后由后端返回，「立即上线」按钮靠它决定是否可点
+      lastSeckillRelationId: null,
       // stock
       stockModel: { stock: 0, stockLocked: 0 },
       // coupon ids
@@ -334,14 +336,20 @@ export default {
     openSeckill (row) {
       this.currentRow = row
       this.seckillModel = { startTime: '', endTime: '', seckillPrice: 0, seckillCount: 0, seckillLimit: 1 }
+      // 清掉上一次的 id，否则换了个 SKU 打开对话框，「立即上线」还亮着，
+      // 点下去激活的是【上一个商品】的秒杀。
+      this.lastSeckillRelationId = null
       this.dlg.seckill = true
     },
     async submitSeckill () {
       if (!this.currentRow) return
       const skuId = this.currentRow.skuId
       try {
-        await http({
-          url: http.adornUrl('/seckill/scheduler/save'),
+        // 地址是 /coupon/seckill/scheduler/save 而不是 /seckill/scheduler/save：
+        // 网关的 coupon_route（Path=/api/coupon/**）现成覆盖 coupon 前缀，
+        // 走这个路径不用为秒杀单开一条网关路由。
+        const { data } = await http({
+          url: http.adornUrl('/coupon/seckill/scheduler/save'),
           method: 'post',
           data: http.adornData({
             skuId: String(skuId),
@@ -352,10 +360,41 @@ export default {
             seckillLimit: String(this.seckillModel.seckillLimit || 1)
           })
         })
-        this.$message.success('秒杀设置已保存')
-        this.dlg.seckill = false
+        if (data && data.code !== 0) {
+          // 后端把「参数填错」当业务错误返回（code≠0 但 HTTP 200），
+          // 不 catch 的话会被当成成功，管理员看到「已保存」而实际没存。
+          this.$message.error(data.msg || '秒杀设置保存失败')
+          return
+        }
+        this.lastSeckillRelationId = (data && data.relationId) || null
+        this.$message.success('秒杀配置已保存，但【尚未上线】—— 需要点「立即上线」才会开始接受抢购')
       } catch (e) {
         this.$message.error('秒杀设置保存失败')
+      }
+    },
+    async activateSeckill () {
+      if (!this.lastSeckillRelationId) return
+      try {
+        await this.$confirm(
+          '上线后立即开始接受抢购 —— 场次的开始时间在抢购路径上并不生效，激活就是唯一的开关。' +
+          '另外，对一个【已经在进行中】的秒杀重复上线，会清空「谁已抢过」的记录，导致已抢中的人可以再抢一次。',
+          '确认上线？', { type: 'warning' })
+      } catch (e) {
+        return // 用户取消
+      }
+      try {
+        const { data } = await http({
+          url: http.adornUrl(`/coupon/seckill/activate/${this.lastSeckillRelationId}`),
+          method: 'post'
+        })
+        if (data && data.code !== 0) {
+          this.$message.error(data.msg || '上线失败')
+          return
+        }
+        this.$message.success('已上线，现在可以抢购了')
+        this.dlg.seckill = false
+      } catch (e) {
+        this.$message.error('上线失败')
       }
     },
     // ========== 库存 ==========
@@ -639,10 +678,18 @@ export default {
     <el-dialog title="参与秒杀" :visible.sync="dlg.seckill" width="560px">
       <el-form label-width="100px">
         <el-form-item label="开始时间">
-          <el-date-picker v-model="seckillModel.startTime" type="datetime" placeholder="选择日期时间" style="width: 100%" />
+          <!-- value-format 不能省：不写的话 el-date-picker 绑定的是 JS Date 对象，
+               JSON 序列化出来是 UTC 的 ISO 串（2026-09-03T02:00:00.000Z），
+               而库里 start_time 是不带时区的 datetime、容器时区又是 UTC，
+               直接落库会差 8 小时且不报错。后端按 yyyy-MM-dd HH:mm:ss 解析墙上时间。 -->
+          <el-date-picker v-model="seckillModel.startTime" type="datetime"
+                          value-format="yyyy-MM-dd HH:mm:ss"
+                          placeholder="选择日期时间" style="width: 100%" />
         </el-form-item>
         <el-form-item label="结束时间">
-          <el-date-picker v-model="seckillModel.endTime" type="datetime" placeholder="选择日期时间" style="width: 100%" />
+          <el-date-picker v-model="seckillModel.endTime" type="datetime"
+                          value-format="yyyy-MM-dd HH:mm:ss"
+                          placeholder="选择日期时间" style="width: 100%" />
         </el-form-item>
         <el-form-item label="秒杀价">
           <el-input-number v-model="seckillModel.seckillPrice" :min="0" :precision="2" :step="1" />
@@ -657,6 +704,11 @@ export default {
       <span slot="footer" class="dialog-footer">
         <el-button @click="dlg.seckill=false">取 消</el-button>
         <el-button type="primary" @click="submitSeckill">保 存</el-button>
+        <!-- 「保存」和「上线」刻意分成两个动作。秒杀的真实库存在 Redis，
+             保存只写数据库的配置值；激活才把它拷进 Redis 并开始接受抢购。
+             而且【场次的开始/结束时间在抢购路径上根本不生效】——
+             激活是唯一的开关，所以「上线」必须是管理员显式点的，不能顺带做。 -->
+        <el-button type="danger" :disabled="!lastSeckillRelationId" @click="activateSeckill">立即上线</el-button>
       </span>
     </el-dialog>
 
