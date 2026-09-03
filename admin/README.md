@@ -71,10 +71,29 @@ Vite 注入的入口是 `<script type="module">`，module 天然 defer；
 提取器的接口数和 `mall-deploy/tools/audit-endpoints.js`（独立实现）**都是 105**，
 两个独立实现收敛到同一个数，基线才算可信。
 
+## 写页面时会反复遇到的坑（P0/P1 已经踩过的）
+
+- **MUI 9 的 `Stack` 不再接受系统属性作为直接 prop**（`alignItems`、`flexWrap`、
+  `justifyContent`…），必须放进 `sx`。v5–v7 是接受的，所以照网上的旧例子抄会中招。
+  没有 TypeScript 的话它会**静默变成一个不生效的属性** —— 这正是这个项目选 TS 的理由。
+  `Box` 不受影响（系统属性本来就是它的用途）。
+- **TypeScript 7 移除了 `baseUrl`**（TS5102），`paths` 必须写相对路径（TS5090）。
+  TS 7 是 Go 重写的原生编译器，不是 5.x 的小版本升级。
+- **`@types/node` 的版本号和 Node 运行时版本不是一回事**：Node 22.22 对应的
+  `@types/node` 是 22.20.x，写 `^22.22.0` 会 ETARGET。
+- **滚更中途新旧 pod 并存**，所以「同一个请求两种响应」通常不是代码 bug。
+  判据是 `total == updated == ready == spec.replicas`；只看 `readyReplicas` 会
+  在旧 pod 还在服务时就判为完成（P1 验证鉴权时就撞上了这个，误以为过滤器有 bug）。
+
 ## 阶段
 
 - [x] **P0** 骨架：构建通、运行时配置读得到、MUI 主题生效
-- [ ] **P1** 外壳：登录/JWT/401 跳转、菜单从 `/sys/menu/nav` 拉、按菜单树动态注册路由、`isAuth` 权限（22 个调用点）、标签页导航
+- [x] **P1** 外壳：登录页 + JWT 存取 + 401 两条路径、菜单从 `/sys/menu/nav` 拉、
+      按菜单树动态注册路由（`import.meta.glob` 建注册表）、`usePermission`（等价旧的 `isAuth`）、
+      侧边栏、标签页导航。
+      **未实现的页面会落到一个明确的「还没重写」占位页**，而不是 404 ——
+      「未完成」和「出故障」在界面上很容易长得一样。首页兼作迁移进度看板，
+      已实现页数来自文件系统真实状态而不是手工清单。
 - [ ] **P2** API 层：105 个接口的类型化客户端 + TanStack Query 封装。**必须在 P3 之前**，否则每个页面各写一遍请求
 - [ ] **P3** 商品域 10 页 + 秒杀活动页（后端 `/coupon/seckill/scheduler/save` 已就绪，缺界面）
 - [ ] **P4** 库存/采购 4 页
