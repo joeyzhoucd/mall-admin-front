@@ -38,8 +38,13 @@ export function Login() {
     setError(null)
     try {
       await login({ ...values, uuid })
-      // 成功后不用手动跳转：AuthProvider 里 isAuthenticated 变 true，
-      // 路由树整体换成已登录的那一套（见 AppRouter）。
+      // 成功后不在这里手动跳转，靠已登录路由树里那条 login -> /home 的重定向。
+      //
+      // 【第一版这里写错了】原注释说「isAuthenticated 变 true，路由树整体换掉，
+      // 所以不用跳转」—— 换路由树【不会改 URL】，浏览器还停在 #/login，
+      // 而已登录的树里没有 login 这条路由，结果是登录完看到 404
+      // （侧边栏和菜单都正常，只有内容区是 404，很容易误判成菜单接口的问题）。
+      // 修在路由表里而不是这里：手动敲 #/login 或用旧书签进来是同一个症状。
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       // 验证码是一次性的，失败后必须换一张 —— 否则用户会拿同一个错码反复试。

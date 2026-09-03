@@ -31,6 +31,19 @@ export function AppRouter() {
     const children: RouteObject[] = [
       { index: true, element: <Navigate to="/home" replace /> },
       { path: 'home', element: <Home /> },
+      /**
+       * 已登录时访问 /login 要重定向到首页。
+       *
+       * 【这条不是多余的，少了它登录完就是 404】
+       * 登录成功后 isAuthenticated 变 true，这里会换成已登录的路由树 ——
+       * 但【URL 不会跟着变】，还停在 #/login。而已登录的树里没有 login 这条路由，
+       * 于是落到 * → 404。实测就是这个症状：侧边栏和菜单都正常，内容区是 404。
+       *
+       * 刻意用重定向而不是「登录成功后手动 navigate('/home')」：
+       * 后者只覆盖「刚登录」这一种情况，手动敲 #/login 或者用旧书签进来
+       * 仍然会 404。放在路由表里对所有来源都成立。
+       */
+      { path: 'login', element: <Navigate to="/home" replace /> },
     ]
 
     for (const route of dynamicRoutes) {
