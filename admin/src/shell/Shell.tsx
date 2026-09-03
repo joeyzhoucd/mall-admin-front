@@ -9,6 +9,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import AccountCircle from '@mui/icons-material/AccountCircle'
 import { Sidebar } from './Sidebar'
 import { useAuth } from '@/auth/AuthProvider'
+import { STATIC_CHILD_ROUTES } from '@/routing/staticRoutes'
 
 const DRAWER_WIDTH = 220
 
@@ -45,10 +46,10 @@ export function Shell() {
   // 访问一个页面就把它加进标签集合。首页不进标签（它是外壳的一部分，不是"一个页面"）。
   useEffect(() => {
     if (!current || current === 'home') return
-    const route = dynamicRoutes.find((r) => r.path === current)
-    if (!route) return
+    const title = resolveTitle(current, dynamicRoutes)
+    if (!title) return
     setTabs((prev) =>
-      prev.some((t) => t.path === current) ? prev : [...prev, { path: current, title: route.title }]
+      prev.some((t) => t.path === current) ? prev : [...prev, { path: current, title }]
     )
   }, [current, dynamicRoutes])
 
@@ -159,4 +160,32 @@ export function Shell() {
       </Box>
     </Box>
   )
+}
+
+/**
+ * 由当前路径求标签标题。
+ *
+ * 三种来源都要覆盖，少一种就表现为「打开了页面但没有标签」：
+ * 1. 菜单驱动的页面 —— 路径和 DynamicRoute.path 精确相等
+ * 2. 静态子页面（如「发布商品」）—— 和 StaticChildRoute.path 精确相等
+ * 3. 带参数的静态子页面（如 `product-spu-spec/:id`）——
+ *    实际路径是 `product-spu-spec/123`，和模式字符串不相等，
+ *    所以要拿 `:` 之前的那段做前缀匹配。
+ *    不处理第 3 种的话，SPU 规格页会打开但顶部没有标签，用户没法切回去。
+ *
+ * 返回 undefined 表示「这个路径不是一个已知页面」（比如 404），此时不建标签。
+ */
+function resolveTitle(current: string, dynamicRoutes: { path: string; title: string }[]): string | undefined {
+  const dyn = dynamicRoutes.find((r) => r.path === current)
+  if (dyn) return dyn.title
+
+  const exact = STATIC_CHILD_ROUTES.find((r) => r.path === current)
+  if (exact) return exact.title
+
+  const withParam = STATIC_CHILD_ROUTES.find((r) => {
+    const i = r.path.indexOf('/:')
+    if (i < 0) return false
+    return current.startsWith(r.path.slice(0, i) + '/')
+  })
+  return withParam?.title
 }

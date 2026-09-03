@@ -7,6 +7,7 @@ import { Shell } from '@/shell/Shell'
 import { Login } from '@/pages/Login'
 import { Home, NotFound, NotImplemented, ExternalNotSupported } from '@/pages/placeholders'
 import { loadPage } from './pageRegistry'
+import { STATIC_CHILD_ROUTES } from './staticRoutes'
 
 /**
  * 路由。<b>页面集合由后端菜单树决定</b>，所以路由树必须在菜单拉到之后才能建。
@@ -72,6 +73,26 @@ export function AppRouter() {
             <Page />
           </Suspense>
         ),
+      })
+    }
+
+    // 不由菜单驱动的子页面（从父页面点进去的，比如「发布商品」）。
+    // 它们不该出现在侧边栏，但必须有路由 —— 详见 staticRoutes.ts 里的说明，
+    // 那里也讲清了它和旧应用那批「绕过不全的菜单」的硬编码路由的区别。
+    for (const route of STATIC_CHILD_ROUTES) {
+      const loader = loadPage(route.menuUrl)
+      children.push({
+        path: route.path,
+        element: loader
+          ? (() => {
+              const Page = lazy(loader)
+              return (
+                <Suspense fallback={<Centered><CircularProgress size={24} /></Centered>}>
+                  <Page />
+                </Suspense>
+              )
+            })()
+          : <NotImplemented menuUrl={route.menuUrl} title={route.title} />,
       })
     }
 
