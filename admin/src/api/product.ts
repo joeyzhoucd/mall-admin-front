@@ -74,6 +74,232 @@ export function updateBrandStatus(brandId: Id, showStatus: number): Promise<unkn
 }
 
 // ---------------------------------------------------------------------------
+// SPU（商品）
+// ---------------------------------------------------------------------------
+
+/**
+ * 商品（SPU）。实测字段。
+ *
+ * <b>列表只返回 brandId / categoryId，不返回名字</b> ——
+ * 所以页面要自己拿品牌列表和分类树在前端拼名字。
+ * 这也是旧版 spu.vue 要额外拉那两个接口的原因。
+ */
+export interface Spu {
+  id: Id
+  spuName: string
+  spuDescription: string
+  brandId: Id
+  categoryId: Id
+  /** <b>1 = 已上架，0 = 未上架/已下架</b>。没有 2 —— 后端 upSpu 置 1、downSpu 置 0。 */
+  publishStatus: number
+  weight: number
+  createTime: string
+  updateTime: string
+}
+
+export interface SpuQuery {
+  page: number
+  limit: number
+  key?: string
+  categoryId?: Id
+  brandId?: Id
+  /** 参数名是 status，不是 publishStatus。 */
+  status?: number
+}
+
+export function fetchSpus(q: SpuQuery, signal?: AbortSignal): Promise<PageResult<Spu>> {
+  return fetchPage<Spu>('/product/spuinfo/list', { ...q }, { signal })
+}
+
+/**
+ * 上架。<b>一次只能一个</b>（后端签名是 /{spuId}/up），
+ * 而下架和删除是批量的 —— 这个不对称是后端的既有形状，不是这里写漏了。
+ *
+ * 上架会同步商品到 ES，比下架慢得多，失败也更常见。
+ */
+export function publishSpu(spuId: Id): Promise<unknown> {
+  return request(`/product/spuinfo/${spuId}/up`, { method: 'POST' })
+}
+
+/** 下架，批量。请求体是 id 数组。 */
+export function unpublishSpus(spuIds: Id[]): Promise<unknown> {
+  return request('/product/spuinfo/unpublish', { method: 'POST', body: spuIds.map(Number) })
+}
+
+/** 删除，批量。请求体是 id 数组。 */
+export function deleteSpus(spuIds: Id[]): Promise<unknown> {
+  return request('/product/spuinfo/delete', { method: 'POST', body: spuIds.map(Number) })
+}
+
+/**
+ * 发布商品的载荷（对应后端 SpuSaveVo）。
+ *
+ * 字段名<b>照抄后端</b>，包括拼错的那个：规格描述图数组叫 <b>decript</b>
+ * （不是 description、也不是 descript）。改成"对的"拼写后端就收不到了，
+ * 而且不报错 —— 只是商品详情页没有描述图。
+ */
+export interface SpuSavePayload {
+  spuName: string
+  spuDescription: string
+  categoryId: number
+  brandId: number
+  weight: number
+  /** 保存时一律 0（未上架）。上架是单独的动作，走 /{spuId}/up。 */
+  publishStatus: number
+  /** 商品详情描述图的地址列表。后端字段名就是 decript。 */
+  decript: string[]
+  /** 商品图片集。 */
+  images: string[]
+  bounds: { buyBounds: number; growBounds: number }
+  baseAttrs: { attrId: number; attrValues: string; showDesc: number }[]
+  skus: SpuSaveSku[]
+}
+
+export interface SpuSaveSku {
+  attr: { attrId: number; attrName: string; attrValue: string }[]
+  skuName: string
+  skuTitle: string
+  skuSubtitle: string
+  price: number
+  stock: number
+  skuCode: string
+  images: { imgUrl: string; defaultImg: number }[]
+  /** 满 N 件打折。countStatus 1 表示叠加其它优惠。 */
+  fullCount: number
+  discount: number
+  countStatus: number
+  /** 满 X 元减 Y 元。 */
+  fullPrice: number
+  reducePrice: number
+  priceStatus: number
+  memberPrice: { id: number; name: string; price: number }[]
+}
+
+export function saveSpu(payload: SpuSavePayload): Promise<unknown> {
+  return request('/product/spuinfo/save', { method: 'POST', body: payload })
+}
+
+/** 某个分类下的属性分组，每组带着它的属性 —— 发布商品第二步填规格参数用。 */
+export interface AttrGroupWithAttrs {
+  attrGroupId: Id
+  attrGroupName: string
+  categoryId: Id
+  sort: number
+  attrs: {
+    attrId: Id
+    attrName: string
+    valueSelect: string | null
+    showDesc: number
+  }[]
+}
+
+export function fetchAttrGroupsWithAttrs(
+  categoryId: Id,
+  signal?: AbortSignal
+): Promise<AttrGroupWithAttrs[]> {
+  return fetchData<AttrGroupWithAttrs[]>(`/product/attrgroup/withattr/${categoryId}`, { signal })
+}
+
+/**
+ * 某分类下的销售属性 —— 发布商品第三步用它组合出 SKU。
+ *
+ * 注意这个地址<b>返回的是分页容器</b>（后端 listSaleAttrByPath 里
+ * 塞了 page=1 / limit=500 再走同一个分页查询），
+ * 虽然它长得像一个「按 id 取列表」的接口。
+ */
+export async function fetchSaleAttrsByCategory(
+  categoryId: Id,
+  signal?: AbortSignal
+): Promise<{ attrId: Id; attrName: string; valueSelect: string | null }[]> {
+  const page = await fetchPage<{ attrId: Id; attrName: string; valueSelect: string | null }>(
+    `/product/attr/sale/list/${categoryId}`,
+    {},
+    { signal }
+  )
+  return page.list
+}
+
+// ---------------------------------------------------------------------------
+// SKU
+// ---------------------------------------------------------------------------
+
+export interface SkuImage {
+  id: Id
+  imgUrl: string
+  imgSort: number
+  /** 1 表示是默认主图。 */
+  defaultImg: number
+}
+
+export interface SkuSaleAttr {
+  attrId: Id
+  attrName: string
+  attrValue: string
+  attrSort: number
+}
+
+export interface Sku {
+  skuId: Id
+  spuId: Id
+  skuName: string
+  skuDesc: string | null
+  categoryId: Id
+  brandId: Id
+  skuDefaultImg: string | null
+  skuTitle: string | null
+  skuSubtitle: string | null
+  price: number
+  saleCount: number
+  categoryName: string | null
+  brandName: string | null
+  images: SkuImage[] | null
+  saleAttrs: SkuSaleAttr[] | null
+}
+
+export interface SkuQuery {
+  page: number
+  limit: number
+  key?: string
+  categoryId?: Id
+  brandId?: Id
+  /** 查某个 SPU 下的全部 SKU 时用。 */
+  spuId?: Id
+}
+
+export function fetchSkus(q: SkuQuery, signal?: AbortSignal): Promise<PageResult<Sku>> {
+  return fetchPage<Sku>('/product/skuinfo/list', { ...q }, { signal })
+}
+
+/**
+ * 可以改的 SKU 字段。
+ *
+ * <b>后端有白名单</b>（SkuInfoServiceImpl.updateBasicInfo）：只有这四个字段会生效，
+ * 请求体里的其它字段一律被忽略 —— 那是防越权写入的，不是漏写。
+ * 所以这里也只暴露这四个，免得界面上摆出一个改了不生效的输入框。
+ */
+export interface SkuBasicUpdate {
+  skuId: Id
+  skuName: string
+  skuTitle: string
+  skuSubtitle: string
+  price: number
+}
+
+export function updateSkuBasic(patch: SkuBasicUpdate): Promise<unknown> {
+  return request('/product/skuinfo/update', { method: 'POST', body: patch })
+}
+
+/** 批量删除 SKU，请求体是 id 数组。 */
+export function deleteSkus(skuIds: Id[]): Promise<unknown> {
+  return request('/product/skuinfo/delete', { method: 'POST', body: skuIds.map(Number) })
+}
+
+/** 单个 SPU 的详情，规格页顶部用来显示「这是哪个商品」。 */
+export function fetchSpuInfo(spuId: Id, signal?: AbortSignal): Promise<Spu> {
+  return fetchData<Spu>(`/product/spuinfo/info/${spuId}`, { signal })
+}
+
+// ---------------------------------------------------------------------------
 // 分类
 // ---------------------------------------------------------------------------
 
