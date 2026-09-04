@@ -9,7 +9,7 @@
 | 项 | 数 |
 |---|---|
 | 页面/组件文件 | 73 |
-| 去重后的后端接口 | 105 |
+| 去重后的后端接口 | 121 |
 | 用到的 Element 组件种类 | 39 |
 | 源码行数 | 13030 |
 
@@ -29,6 +29,12 @@ el-button  el-upload  el-tree  el-table-column  el-dialog  el-col  el-form  el-f
 
 - …
 - 删除 → removeFile
+
+### `src/components/TreeSelector.vue`
+
+**接口**（重写后必须一个不少、一个不多）：
+
+- `/product/category/list/tree`
 
 ### `src/router/index.js`
 
@@ -152,6 +158,8 @@ el-button  el-upload  el-tree  el-table-column  el-dialog  el-col  el-form  el-f
 
 - `/member/memberlevel/delete`
 - `/member/memberlevel/list`
+- `/member/memberlevel/save`
+- `/member/memberlevel/update`
 
 **动作**：
 
@@ -210,6 +218,8 @@ el-button  el-upload  el-tree  el-table-column  el-dialog  el-col  el-form  el-f
 - `/product/attrgroup/delete`
 - `/product/attrgroup/delete/{}`
 - `/product/attrgroup/list`
+- `/product/attrgroup/save`
+- `/product/attrgroup/update`
 
 **动作**：
 
@@ -233,6 +243,8 @@ el-button  el-upload  el-tree  el-table-column  el-dialog  el-col  el-form  el-f
 - `/product/attr/sale/delete`
 - `/product/attr/sale/delete/{}`
 - `/product/attr/sale/list`
+- `/product/attr/sale/save`
+- `/product/attr/sale/update`
 - `/product/attr/sale/updateEnable`
 
 **动作**：
@@ -255,6 +267,8 @@ el-button  el-upload  el-tree  el-table-column  el-dialog  el-col  el-form  el-f
 - `/product/attr/spec/delete`
 - `/product/attr/spec/delete/{}`
 - `/product/attr/spec/list`
+- `/product/attr/spec/save`
+- `/product/attr/spec/update`
 - `/product/attr/spec/updateEnable`
 - `/product/attrgroup/list`
 
@@ -283,6 +297,8 @@ el-button  el-upload  el-tree  el-table-column  el-dialog  el-col  el-form  el-f
 
 - `/product/brand/delete/{}`
 - `/product/brand/list`
+- `/product/brand/save`
+- `/product/brand/update`
 - `/product/brand/updateStatus`
 - `/product/category/list/tree`
 - `/product/categorybrandrelation/getRelationsByBrandId/{}`
@@ -308,7 +324,9 @@ el-button  el-upload  el-tree  el-table-column  el-dialog  el-col  el-form  el-f
 - `/product/category/delete`
 - `/product/category/info/{}`
 - `/product/category/list/tree`
+- `/product/category/save`
 - `/product/category/save/drag`
+- `/product/category/update`
 
 **动作**：
 
@@ -567,6 +585,8 @@ el-button  el-upload  el-tree  el-table-column  el-dialog  el-col  el-form  el-f
 - `/ware/purchase/finish`
 - `/ware/purchase/list`
 - `/ware/purchase/receive`
+- `/ware/purchase/save`
+- `/ware/purchase/update`
 
 **动作**：
 
@@ -594,6 +614,8 @@ el-button  el-upload  el-tree  el-table-column  el-dialog  el-col  el-form  el-f
 - `/ware/purchase/merge`
 - `/ware/purchasedetail/delete`
 - `/ware/purchasedetail/list`
+- `/ware/purchasedetail/save`
+- `/ware/purchasedetail/update`
 - `/ware/wareinfo/list`
 
 **动作**：

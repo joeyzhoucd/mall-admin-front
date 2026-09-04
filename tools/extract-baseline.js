@@ -67,6 +67,47 @@ function endpoints(src) {
       found.add(m[1].replace(/\$\{[^}]*\}/g, '{}'));
     }
   }
+
+  // ---- 变量形式：adornUrl(url)，url 在上面几行被赋值 ----
+  //
+  // 【为什么必须处理这一种】只认字面量的第一版漏掉了【所有的保存接口】——
+  // 6 个页面都写成 const url = this.isEdit ? '/x/update' : '/x/save'，
+  // 于是 brand 页的基线里有 delete、list、updateStatus，唯独没有 save 和 update。
+  // 一份系统性偏低的基线比没有基线更危险：它让人以为验收清单是全的。
+  //
+  // 做法是精确的而不是猜的：先拿到被传进 adornUrl 的【变量名】，
+  // 再只在那个变量的赋值语句里找路径字面量。不做全文件扫路径字符串，
+  // 因为那会把 router 里的 path 也当成接口。
+  for (const m of src.matchAll(/adornUrl\(\s*([A-Za-z_$][\w$.]*)\s*\)/g)) {
+    const name = m[1];
+    // this.apiUrl 这种要找两个地方：`this.apiUrl = ...` 找不到时，
+    // 它多半是个 prop，值写在 `apiUrl: { default: '/x' }` 里。
+    // 不回退的话，凡是把地址做成 prop 的可复用组件在基线里都是个洞。
+    const candidates = name.startsWith('this.') ? [name, name.slice(5)] : [name];
+    let hit = false;
+    for (const cand of candidates) {
+      const esc = cand.replace(/[.*+?^${}()|[\]\\]/g, (c) => '\\' + c);
+      const assign = new RegExp('(?:const|let|var|this)?\\s*' + esc + '\\s*[:=]([^\\n]*)', 'g');
+      for (const a of src.matchAll(assign)) {
+        for (const lit of a[1].matchAll(/['"`](\/[^'"`]*)['"`]/g)) {
+          found.add(lit[1].replace(/\$\{[^}]*\}/g, '{}'));
+          hit = true;
+        }
+      }
+      // prop 的 default 和属性名不在同一行：`apiUrl: {` 换行后才是 `default: '/x'`。
+      if (!hit) {
+        const block = new RegExp(esc + '\\s*:\\s*\\{[^}]*?default\\s*:\\s*[\'"`](/[^\'"`]*)[\'"`]', 's');
+        const b = block.exec(src);
+        if (b) { found.add(b[1].replace(/\$\{[^}]*\}/g, '{}')); hit = true; }
+      }
+      if (hit) break;
+    }
+    // 解析不出来的要【说出来】，不能静默当成「这里没有接口」。
+    // 典型是 TreeSelector 的 this.apiUrl —— 它是父组件传进来的 prop，
+    // 值不在这个文件里，本文件的基线对它确实有个洞，那就把洞标出来。
+    if (!hit) found.add('(未解析的动态地址: ' + name + ')');
+  }
+
   return [...found].sort();
 }
 
