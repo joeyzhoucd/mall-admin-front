@@ -99,11 +99,26 @@ interface RawCategory {
   children?: RawCategory[]
 }
 
+/**
+ * 树节点保留<b>全部可编辑字段</b>。
+ *
+ * 【为什么不调 /product/category/info/{catId}】
+ * 旧页面点「编辑」会再去拉一次详情，但 list/tree 返回的就是完整实体
+ * （实测含 icon、productUnit、showStatus、sort），再拉一次是白跑一趟往返。
+ * 所以那个接口在这里<b>有意不用</b> —— 记在这里是为了让对照 BASELINE.md 的人
+ * 知道这是个决定，不是漏了。
+ */
 export interface CategoryNode {
   id: Id
   name: string
   parentId: Id
   level: number
+  sort: number
+  showStatus: number
+  icon: string
+  productUnit: string
+  /** 挂在该分类下的商品数。删除前的判断依据之一，后端可能给 null。 */
+  productCount: number | null
   children: CategoryNode[]
 }
 
@@ -113,6 +128,13 @@ function toCategoryNode(raw: RawCategory): CategoryNode {
     name: raw.name,
     parentId: normalizeId(raw.parentCid),
     level: raw.catLevel,
+    sort: raw.sort,
+    showStatus: raw.showStatus,
+    // 后端这几个字段会给 null，而表单里 null 会让 MUI 的输入框从受控变非受控
+    // （控制台一句警告，然后那个框就再也改不动了）。在边界上归一成空串。
+    icon: raw.icon ?? '',
+    productUnit: raw.productUnit ?? '',
+    productCount: raw.productCount,
     children: (raw.children ?? []).map(toCategoryNode),
   }
 }
@@ -120,6 +142,86 @@ function toCategoryNode(raw: RawCategory): CategoryNode {
 export async function fetchCategoryTree(signal?: AbortSignal): Promise<CategoryNode[]> {
   const raw = await fetchData<RawCategory[]>('/product/category/list/tree', { signal })
   return raw.map(toCategoryNode)
+}
+
+/**
+ * 分类的可编辑字段。<b>id 一律用字符串</b>（见 CategoryNode 上的说明），
+ * 发给后端时再转回数字 —— 后端的 catId / parentCid 是 Long。
+ */
+export interface CategoryDraft {
+  catId?: Id
+  name: string
+  parentCid: Id
+  catLevel: number
+  sort: number
+  showStatus: number
+  icon: string
+  productUnit: string
+}
+
+/** 字符串 id 转回数字。空串要变成 undefined 而不是 0 —— 0 是根分类的合法父 id。 */
+function toNumberId(id: Id | undefined): number | undefined {
+  if (id === undefined || id === '') return undefined
+  const n = Number(id)
+  return Number.isFinite(n) ? n : undefined
+}
+
+function toRawPayload(d: CategoryDraft) {
+  return {
+    catId: toNumberId(d.catId),
+    name: d.name,
+    parentCid: toNumberId(d.parentCid) ?? 0,
+    catLevel: d.catLevel,
+    sort: d.sort,
+    showStatus: d.showStatus,
+    icon: d.icon,
+    productUnit: d.productUnit,
+  }
+}
+
+export function createCategory(draft: CategoryDraft): Promise<unknown> {
+  const { catId: _drop, ...body } = toRawPayload(draft)
+  return request('/product/category/save', { method: 'POST', body })
+}
+
+export function updateCategory(draft: CategoryDraft): Promise<unknown> {
+  return request('/product/category/update', { method: 'POST', body: toRawPayload(draft) })
+}
+
+/** 批量删除。请求体是 id 数组（后端签名是 Long[]），是<b>逻辑删除</b>。 */
+export function deleteCategories(catIds: Id[]): Promise<unknown> {
+  return request('/product/category/delete', {
+    method: 'POST',
+    body: catIds.map((id) => toNumberId(id)),
+  })
+}
+
+/** 调整层级/排序后的元素。旧前端拖拽保存发的就是这四个字段。 */
+export interface CategoryPositionChange {
+  catId: Id
+  parentCid: Id
+  catLevel: number
+  sort: number
+}
+
+/**
+ * 批量保存层级/排序调整。
+ *
+ * 【2026-09-03 之前这个接口是坏的】后端用的是 saveBatch（INSERT 语义），
+ * 而调用方发的是已存在的分类，必然主键冲突 —— 也就是说旧后台的
+ * 「批量保存」按钮从上线起就没成功过一次。
+ * 已改成 updateBatchById，见 CategoryControllerGuardTest。
+ */
+export function saveCategoryPositions(changes: CategoryPositionChange[]): Promise<unknown> {
+  return request('/product/category/save/drag', {
+    method: 'POST',
+    body: changes.map((c) => ({
+      catId: toNumberId(c.catId),
+      parentCid: toNumberId(c.parentCid) ?? 0,
+      catLevel: c.catLevel,
+      sort: c.sort,
+    })),
+  })
 }
 
 // ---------------------------------------------------------------------------
