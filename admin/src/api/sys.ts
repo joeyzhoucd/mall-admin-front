@@ -5,13 +5,15 @@ import type { NavResponse } from '@/types/menu'
 /**
  * ⚠️ 这一组接口的<b>筛选参数名每个都不一样</b>，传错会被静默忽略、返回全量：
  *
- *     /sys/user/list    → username
- *     /sys/role/list    → roleName
- *     /sys/config/list  → paramKey
- *     /sys/log/list     → key          ← 只有这一个叫 key
- *     /sys/menu/list    → （没有筛选参数，返回全部）
+ *     /sys/user/list     → username
+ *     /sys/role/list     → roleName
+ *     /sys/config/list   → paramKey
+ *     /sys/log/list      → key          ← 只有这一个叫 key
+ *     /sys/schedule/list → beanName
+ *     /sys/oss/list      → （没有筛选参数）
+ *     /sys/menu/list     → （没有筛选参数，返回全部）
  *
- * 五个接口四种命名。所以每个 fetch 函数的参数类型都写死了对应的那个名字，
+ * 七个接口五种命名。所以每个 fetch 函数的参数类型都写死了对应的那个名字，
  * 而不是共用一个 { key?: string } —— 共用的话，写错了 TypeScript 不会报，
  * 表现是「搜索框能输入、点查询没反应、结果还是全部」。
  * 2026-09-05 逐个读控制器源码确认（mall-admin 有自己的鉴权，探不了接口）。
@@ -296,4 +298,135 @@ export function fetchSysLogs(
   signal?: AbortSignal
 ): Promise<PageResult<SysLog>> {
   return fetchPage<SysLog>('/sys/log/list', { ...q }, { signal })
+}
+
+// ---------------------------------------------------------------------------
+// 定时任务
+// ---------------------------------------------------------------------------
+
+/** 0 正常 / 1 暂停。注意和别处的「1 正常」相反，别照抄。 */
+export const JOB_STATUS = { NORMAL: 0, PAUSED: 1 } as const
+
+export interface ScheduleJob {
+  jobId: Id
+  /** 被调用的 Spring bean 名。只有标了 @ScheduledTask 的类允许被调用。 */
+  beanName: string
+  params: string | null
+  cronExpression: string
+  status: number
+  remark: string | null
+  createTime: string | null
+}
+
+/** 筛选参数叫 beanName。 */
+export function fetchScheduleJobs(
+  q: { page: number; limit: number; beanName?: string },
+  signal?: AbortSignal
+): Promise<PageResult<ScheduleJob>> {
+  return fetchPage<ScheduleJob>('/sys/schedule/list', { ...q }, { signal })
+}
+
+/**
+ * 允许被定时任务调用的 bean 名。
+ *
+ * 后端 2026-09-05 新增（SysScheduleController.beans）。有了它，
+ * beanName 才能做成下拉 —— 自由文本填错不会当场报错，
+ * 要等这个任务按 cron 真的跑起来才抛「没有标 @ScheduledTask」，
+ * cron 是凌晨三点的话就得等到第二天。
+ *
+ * 这不削弱白名单：执行期那道校验一个字没动，这里只是把同一份名单读出来。
+ */
+export function fetchScheduleBeans(signal?: AbortSignal): Promise<string[]> {
+  return fetchData<string[]>('/sys/schedule/beans', { signal })
+}
+
+export function createScheduleJob(
+  j: { beanName: string; params: string; cronExpression: string; remark: string }
+): Promise<unknown> {
+  return request('/sys/schedule/save', { method: 'POST', body: j })
+}
+
+export function updateScheduleJob(
+  j: { jobId: Id; beanName: string; params: string; cronExpression: string; remark: string; status: number }
+): Promise<unknown> {
+  return request('/sys/schedule/update', { method: 'POST', body: { ...j, jobId: Number(j.jobId) } })
+}
+
+export function deleteScheduleJobs(jobIds: Id[]): Promise<unknown> {
+  return request('/sys/schedule/delete', { method: 'POST', body: jobIds.map(Number) })
+}
+
+/** 立即执行一次。<b>不改变任务本身的状态</b>，暂停中的任务也能被立即执行。 */
+export function runScheduleJobs(jobIds: Id[]): Promise<unknown> {
+  return request('/sys/schedule/run', { method: 'POST', body: jobIds.map(Number) })
+}
+
+export function pauseScheduleJobs(jobIds: Id[]): Promise<unknown> {
+  return request('/sys/schedule/pause', { method: 'POST', body: jobIds.map(Number) })
+}
+
+export function resumeScheduleJobs(jobIds: Id[]): Promise<unknown> {
+  return request('/sys/schedule/resume', { method: 'POST', body: jobIds.map(Number) })
+}
+
+// ---------------------------------------------------------------------------
+// 定时任务日志
+// ---------------------------------------------------------------------------
+
+/** 0 失败 / 1 成功。和 JOB_STATUS 又不一样，这里 1 才是好的。 */
+export interface ScheduleJobLog {
+  logId: Id
+  jobId: Id
+  beanName: string
+  params: string | null
+  status: number
+  error: string | null
+  /** 耗时，毫秒。 */
+  times: number | null
+  createTime: string | null
+}
+
+export function fetchScheduleLogs(
+  q: { page: number; limit: number; jobId?: Id },
+  signal?: AbortSignal
+): Promise<PageResult<ScheduleJobLog>> {
+  return fetchPage<ScheduleJobLog>('/sys/scheduleLog/list', { ...q }, { signal })
+}
+
+// ---------------------------------------------------------------------------
+// 文件（对象存储）
+// ---------------------------------------------------------------------------
+
+export interface SysOss {
+  id: Id
+  url: string
+  objectKey: string
+  fileSize: number | null
+  contentType: string | null
+  createBy: string | null
+  createDate: string | null
+}
+
+/** 没有筛选参数。 */
+export function fetchOssFiles(
+  q: { page: number; limit: number },
+  signal?: AbortSignal
+): Promise<PageResult<SysOss>> {
+  return fetchPage<SysOss>('/sys/oss/list', { ...q }, { signal })
+}
+
+export function deleteOssFiles(ids: Id[]): Promise<unknown> {
+  return request('/sys/oss/delete', { method: 'POST', body: ids.map(Number) })
+}
+
+/**
+ * 对象存储的<b>公开</b>配置（bucket、endpoint 之类），不含密钥。
+ *
+ * 对应的写接口 /sys/oss/saveConfig <b>刻意没有实现</b>：
+ * 把云存储凭证放进一张后台可编辑的数据库表，意味着它会随备份、
+ * 从库和 binlog 一起扩散，而且任何能打开后台的人都能读到。
+ * 凭证走 Sealed Secrets 注入到服务里，后台只读不写。
+ */
+export function fetchOssConfig(signal?: AbortSignal): Promise<Record<string, unknown>> {
+  return fetchData<Record<string, unknown>>('/sys/oss/config', { signal })
 }
