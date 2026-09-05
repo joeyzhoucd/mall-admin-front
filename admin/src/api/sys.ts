@@ -1,4 +1,5 @@
-import { request } from './client'
+import { request, fetchPage } from './client'
+import type { Id, PageResult } from './types'
 import type { NavResponse } from '@/types/menu'
 
 /**
@@ -56,4 +57,34 @@ export async function fetchNav(): Promise<{
     menuList: res.menuList ?? [],
     permissions: res.permissions ?? [],
   }
+}
+
+/**
+ * 后台用户。
+ *
+ * <h3>筛选参数叫 username，不是 key</h3>
+ * 其它服务的列表接口大多用 key，mall-admin 这边是
+ * `@RequestParam("username")`，传 key 会被**静默忽略**、返回全量。
+ * 和品牌那个坑同一类，只是这次是参数名不同而不是压根没实现。
+ *
+ * <h3>口令哈希不会带出来</h3>
+ * 后端 SysUserService.page() 里显式把 password 和 salt 置空了
+ * （2026-09-05 读过源码确认），所以这里的类型也不声明它们 ——
+ * 声明了会诱使别人去用一个永远是 null 的字段。
+ */
+export interface SysUser {
+  userId: Id
+  username: string
+  email: string | null
+  mobile: string | null
+  /** 1 正常 / 0 禁用。 */
+  status: number
+  createTime: string | null
+}
+
+export function fetchSysUsers(
+  q: { page: number; limit: number; username?: string },
+  signal?: AbortSignal
+): Promise<PageResult<SysUser>> {
+  return fetchPage<SysUser>('/sys/user/list', { ...q }, { signal })
 }
