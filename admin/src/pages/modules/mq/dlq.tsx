@@ -100,6 +100,13 @@ export default function DlqPage() {
   const queues = queuesQuery.data ?? []
   const total = useMemo(() => queues.reduce((a, q) => a + q.messageCount, 0), [queues])
 
+  // 【用 === false / === 0 严格判断，不能用 !dlqExists】
+  // 前端和后端各自独立部署，旧后端不返回这两个字段（undefined）。
+  // 写成 !dlqExists 的话，前端先上线就会把 5 条全部报成"死信没接通"——
+  // 一个误报的告警会让人学会忽略它，那比没有告警更糟。
+  const brokenDlqs = useMemo(() => queues.filter((q) => q.dlqExists === false), [queues])
+  const noConsumer = useMemo(() => queues.filter((q) => q.sourceConsumers === 0), [queues])
+
   const parsedLimit = Number(limit)
   const limitValid = Number.isInteger(parsedLimit) && parsedLimit > 0 && parsedLimit <= 100
 
@@ -110,6 +117,32 @@ export default function DlqPage() {
         消费失败并且重试耗尽的消息会落到这里。死信队列<b>平时应该是空的</b> ——
         有堆积就意味着某一类消息一直处理不了，而对应的业务动作没有发生。
       </Typography>
+
+      {/* 这一条要排在"有死信"之前 —— 死信队列不存在的时候，深度 0 是没有意义的，
+          而这一页最容易骗人的地方恰恰是"深度全 0 看着很健康"。 */}
+      {brokenDlqs.length > 0 && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          <b>{brokenDlqs.length} 个死信队列在 broker 上不存在，死信机制没有接通。</b>
+          <br />
+          消费失败的消息不会落到这里，而是被<b>直接丢弃</b>。
+          所以下面显示的深度 0 不代表"没有失败过"，只代表"没有地方记录失败"。
+          <br />
+          缺失的：{brokenDlqs.map((q) => q.dlq).join('、')}
+          <br />
+          最常见的原因是源队列建于死信配置之前、参数不匹配导致声明失败
+          （启动日志里会有 <code>PRECONDITION_FAILED ... x-dead-letter-exchange</code>）。
+          修复步骤见仓库里的 <code>mall-deploy/RUNBOOK-mq-queue-args.md</code>。
+        </Alert>
+      )}
+
+      {noConsumer.length > 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <b>{noConsumer.length} 个源队列没有消费者</b>，消息只会堆积、不会被处理：
+          {noConsumer.map((q) => q.sourceQueue).join('、')}
+          <br />
+          这件事在常规监控里是看不见的 —— 队列存在、深度可能是 0、pod 也是 Ready。
+        </Alert>
+      )}
 
       {total > 0 && (
         <Alert severity="warning" sx={{ mb: 2 }}>
@@ -175,8 +208,28 @@ export default function DlqPage() {
                 )}
                 {queues.map((q) => (
                   <TableRow key={q.dlq} hover>
-                    <TableCell sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{q.dlq}</TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{q.sourceQueue}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{q.dlq}</Typography>
+                      {/* 只在后端明确说了 false 时才标 —— undefined 是"旧后端没这个字段"，
+                          不是"队列不存在"。 */}
+                      {q.dlqExists === false && (
+                        <Chip size="small" color="error" label="broker 上不存在" sx={{ mt: 0.5 }} />
+                      )}
+                    </TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{q.sourceQueue}</Typography>
+                      {q.sourceConsumers !== undefined && (
+                        <Typography
+                          variant="caption"
+                          color={q.sourceConsumers === 0 ? 'error' : 'text.secondary'}
+                          component="div"
+                        >
+                          {q.sourceConsumers === 0
+                            ? '没有消费者 —— 消息只会堆积'
+                            : `${q.sourceConsumers} 个消费者`}
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       <Typography variant="body2">{q.replayExchange}</Typography>
                       <Typography variant="caption" color="text.secondary">{q.replayRoutingKey}</Typography>

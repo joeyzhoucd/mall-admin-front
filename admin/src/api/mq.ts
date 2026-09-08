@@ -35,8 +35,32 @@ export interface DlqQueue {
   /** 重投的目标交换机。 */
   replayExchange: string
   replayRoutingKey: string
-  /** 当前堆积条数。 */
+  /** 当前堆积条数。<b>dlqExists 为 false 时这个数没有意义</b>（队列都不存在）。 */
   messageCount: number
+  /**
+   * 死信队列在 broker 上是否<b>存在</b>。
+   *
+   * false = 死信机制完全没接通，消费失败的消息会被<b>直接丢弃</b>。
+   *
+   * 这个字段是 2026-09-08 加的，因为在那之前这一页会把「队列不存在」
+   * 显示成「队列是空的」—— 后端用 getQueueProperties 取深度，
+   * 而它对不存在的队列返回 null，被当成了 0。
+   * 当时的实际情况是 5 个死信队列一个都不存在，而页面显示"5 条绑定、深度全 0"。
+   *
+   * <b>可能是 undefined</b>：前端和后端各自独立部署，
+   * 旧后端不返回这个字段。所以判断必须用 `=== false` 而不是 `!dlqExists`，
+   * 否则前端先上线会误报一片红。
+   */
+  dlqExists?: boolean
+  /** 源队列是否存在。同样可能是 undefined（旧后端）。 */
+  sourceExists?: boolean
+  /**
+   * 源队列的消费者数。0 = 没人消费，消息只会堆积。
+   *
+   * 那次故障里 order.release.order.queue 就是 0，意味着超时订单永远不关、
+   * 锁定的库存永远不释放 —— 而队列深度是 0，任何常规监控都是绿的。
+   */
+  sourceConsumers?: number
 }
 
 export interface DlqMessage {
