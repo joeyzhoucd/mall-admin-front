@@ -4,6 +4,7 @@ import {
   Box, Button, Card, CardContent, Stack, TextField, Typography, Alert,
 } from '@mui/material'
 import { captchaUrl } from '@/api/client'
+import { uuidv4 } from '@/utils/uuid'
 import { useAuth } from '@/auth/AuthProvider'
 
 interface FormValues {
@@ -23,14 +24,14 @@ interface FormValues {
  */
 export function Login() {
   const { login } = useAuth()
-  const [uuid, setUuid] = useState(() => crypto.randomUUID())
+  const [uuid, setUuid] = useState(() => uuidv4())
   const [error, setError] = useState<string | null>(null)
   const {
     register, handleSubmit, formState: { errors, isSubmitting }, setValue,
   } = useForm<FormValues>({ defaultValues: { username: '', password: '', captcha: '' } })
 
   const refreshCaptcha = useCallback(() => {
-    setUuid(crypto.randomUUID())
+    setUuid(uuidv4())
     setValue('captcha', '')
   }, [setValue])
 
