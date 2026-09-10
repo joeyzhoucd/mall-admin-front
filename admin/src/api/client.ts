@@ -58,6 +58,20 @@ export interface RequestOptions {
   /** 请求体，会 JSON 序列化。 */
   body?: unknown
   signal?: AbortSignal
+  /**
+   * 这个接口<b>不带 R 信封</b>，跳过 {@code code} 校验。
+   *
+   * <p>整个后端目前只有一个这样的接口：{@code GET /sys/menu/list}
+   * 直接返回 {@code List<SysMenuEntity>}（后端 {@code SysMenuController.list()}
+   * 的注释里明确写了这一点，契约在 {@code openapi/admin-api.yaml}）。
+   *
+   * <p><b>不要为了统一而去改后端</b>：老 Vue 后台就是按裸数组写的，
+   * 而它现在还在服务 {@code /}。改后端会把老后台弄坏。
+   *
+   * <p>2026-09-10 实测：不加这个选项时，菜单管理页报
+   * {@code 业务失败，code=undefined} —— 因为数组上没有 code 字段。
+   */
+  raw?: boolean
 }
 
 function buildUrl(path: string, query?: RequestOptions['query']): string {
@@ -138,6 +152,28 @@ export async function request<T = ApiEnvelope>(
   }
   if (!res.ok) {
     throw new ApiError(payload.code ?? res.status, payload.msg ?? `HTTP ${res.status}`, payload)
+  }
+  if (options.raw === true) {
+    // 不带信封的接口：到这里已经确认了 HTTP 2xx 且 content-type 是 JSON，
+    // 剩下的形状由调用方的类型参数负责。
+    return payload as unknown as T
+  }
+  // 【区分"业务拒绝"和"这个接口压根不带信封"】
+  // 两者原来都报成 `业务失败，code=undefined`，而后者的修法完全不同
+  // （要加 raw: true，不是去查后端为什么拒绝）。
+  // 2026-09-10 菜单管理页就卡在这里：报错完全不指向真正的原因。
+  // 走 unknown 做形状检查：payload 的声明类型是 ApiEnvelope（带 code），
+  // 直接在它上面用 'code' in payload 收窄会把否定分支推成 never，
+  // 于是取 .length 都不让过。这里要判的恰恰是"它其实不是 ApiEnvelope"。
+  const shapeless = payload as unknown
+  if (shapeless === null || typeof shapeless !== 'object' || !('code' in shapeless)) {
+    const shape = Array.isArray(shapeless)
+      ? `数组（${shapeless.length} 项）`
+      : typeof shapeless
+    throw new Error(
+      `${path} 的响应里没有 «code» 字段（实际是${shape}）。` +
+        '这个接口大概不带 R 信封 —— 调用时加 { raw: true }，而不是去查后端为什么拒绝。'
+    )
   }
   if (payload.code !== 0) {
     throw new ApiError(payload.code, payload.msg ?? `业务失败，code=${payload.code}`, payload)

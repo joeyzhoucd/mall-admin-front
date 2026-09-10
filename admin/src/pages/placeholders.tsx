@@ -1,28 +1,40 @@
-import { Alert, AlertTitle, Box, Chip, Link, Stack, Typography } from '@mui/material'
-import { useAuth } from '@/auth/AuthProvider'
-import { implementedPages } from '@/routing/pageRegistry'
+import { Alert, AlertTitle, Box, Link, Typography } from '@mui/material'
 
-/** 首页。P1 阶段兼作迁移进度看板 —— 这个数字是文件系统的真实状态，不是手工维护的清单。 */
+/**
+ * 首页。
+ *
+ * <h3>这里原来是重写期间的进度看板，2026-09-10 拆掉了</h3>
+ * 它把 <code>src/pages/modules/</code> 下的文件名铺成一排 Chip，用来回答
+ * "还剩几页没做"。重写做完之后（菜单 25 页 / 实现 27 个文件）这个问题不存在了，
+ * 剩下的只是<b>给开发者看的调试信息占着用户的落地页</b>。
+ *
+ * <h3>为什么不换成一个数据仪表盘</h3>
+ * 想过。做一个"今日订单 / 会员数 / 待处理死信"的概览确实比空页面好看，
+ * 但它需要一批聚合接口，而 <b>2026-09-10 刚查出 11 个接口的响应键和前端假设不一致</b>
+ * （renren 生成器用实体名做键、手写的用 <code>data</code>，前端一律按 <code>data</code> 取）。
+ * 在那种情况下拼一个仪表盘，最可能的结果是几个静默显示 0 或 undefined 的数字 ——
+ * <b>而一个显示错数字的仪表盘比没有仪表盘糟得多</b>：它看起来在工作。
+ *
+ * 真要做，前提是每个数据源都单独验证过。那是一件独立的事。
+ */
 export function Home() {
-  const { dynamicRoutes } = useAuth()
-  const done = implementedPages()
-  const total = dynamicRoutes.filter((r) => !r.externalUrl).length
-
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h6" gutterBottom>概览</Typography>
-      <Alert severity="info" sx={{ mb: 2 }}>
-        <AlertTitle>重写进度</AlertTitle>
-        菜单里共 <b>{total}</b> 个页面，已实现 <b>{done.length}</b> 个。
-        这两个数都是运行时算出来的：页面数来自后端菜单树，
-        已实现数来自 <code>src/pages/modules/</code> 下真实存在的文件
-        （<code>import.meta.glob</code>），不是手工维护的勾选清单。
+      <Typography variant="h6" gutterBottom>mall 后台管理</Typography>
+      <Alert severity="info" sx={{ maxWidth: 720 }}>
+        <AlertTitle>从左侧菜单进入各功能</AlertTitle>
+        菜单由后端的 <code>sys_menu</code> 表驱动 —— 页面能不能打开、挂在什么路径上，
+        完全取决于那张表。新增页面除了写组件，还要在菜单里加一行，
+        否则表现就是"功能不存在"。
+        <br />
+        <br />
+        前台商城：
+        <Link href="http://mall.com" target="_blank" rel="noreferrer">mall.com</Link>
+        {' · '}
+        <Link href="http://seckill.mall.com/promotion.html" target="_blank" rel="noreferrer">
+          促销领券
+        </Link>
       </Alert>
-      {done.length > 0 && (
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          {done.map((p) => <Chip key={p} label={p} size="small" />)}
-        </Stack>
-      )}
     </Box>
   )
 }

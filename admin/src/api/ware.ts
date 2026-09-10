@@ -25,7 +25,7 @@ export function fetchWareInfos(
 }
 
 export function fetchWareInfo(id: Id, signal?: AbortSignal): Promise<WareInfo> {
-  return fetchData<WareInfo>(`/ware/wareinfo/info/${id}`, { signal })
+  return fetchData<WareInfo>(`/ware/wareinfo/info/${id}`, { signal, key: 'wareInfo' })
 }
 
 /**
@@ -74,7 +74,7 @@ export function fetchWareSkus(
 }
 
 export function fetchWareSku(id: Id, signal?: AbortSignal): Promise<WareSku> {
-  return fetchData<WareSku>(`/ware/waresku/info/${id}`, { signal })
+  return fetchData<WareSku>(`/ware/waresku/info/${id}`, { signal, key: 'wareSku' })
 }
 
 export function saveWareSku(s: Omit<WareSku, 'id'>): Promise<unknown> {

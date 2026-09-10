@@ -40,12 +40,3 @@ function normalize(menuUrl: string): string {
   return menuUrl.replace(/^\//, '')
 }
 
-/**
- * 已实现的页面清单。
- *
- * 给「迁移进度」用：P1 时这里是空的，每完成一个页面就多一项。
- * 这比在 README 里手工维护一个勾选清单可靠 —— 它就是文件系统的真实状态。
- */
-export function implementedPages(): string[] {
-  return [...registry.keys()].sort()
-}

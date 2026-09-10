@@ -107,7 +107,7 @@ export function fetchSysUsers(
 }
 
 export function fetchSysUser(userId: Id, signal?: AbortSignal): Promise<SysUser & { roleIdList: Id[] }> {
-  return fetchData<SysUser & { roleIdList: Id[] }>(`/sys/user/info/${userId}`, { signal })
+  return fetchData<SysUser & { roleIdList: Id[] }>(`/sys/user/info/${userId}`, { signal, key: 'user' })
 }
 
 /** 新增用户。password 只在新增时传；改密码是另一回事，编辑表单里留空表示不改。 */
@@ -159,11 +159,11 @@ export function fetchSysRoles(
 
 /** 不分页的全部角色，给用户表单的多选用。 */
 export function fetchAllSysRoles(signal?: AbortSignal): Promise<SysRole[]> {
-  return fetchData<SysRole[]>('/sys/role/select', { signal })
+  return fetchData<SysRole[]>('/sys/role/select', { signal, key: 'list' })
 }
 
 export function fetchSysRole(roleId: Id, signal?: AbortSignal): Promise<SysRole & { menuIdList: Id[] }> {
-  return fetchData<SysRole & { menuIdList: Id[] }>(`/sys/role/info/${roleId}`, { signal })
+  return fetchData<SysRole & { menuIdList: Id[] }>(`/sys/role/info/${roleId}`, { signal, key: 'role' })
 }
 
 export function createSysRole(r: { roleName: string; remark?: string; menuIdList: Id[] }): Promise<unknown> {
@@ -211,16 +211,16 @@ export const MENU_TYPE_TEXT: Record<number, string> = { 0: '目录', 1: '菜单'
 
 /** <b>没有筛选参数</b>，返回全部菜单（扁平）。 */
 export function fetchSysMenus(signal?: AbortSignal): Promise<SysMenu[]> {
-  return fetchData<SysMenu[]>('/sys/menu/list', { signal })
+  return request<SysMenu[]>('/sys/menu/list', { signal, raw: true })
 }
 
 /** 可作为父节点的菜单（目录和菜单，不含按钮），树形。 */
 export function fetchSysMenuSelect(signal?: AbortSignal): Promise<SysMenu[]> {
-  return fetchData<SysMenu[]>('/sys/menu/select', { signal })
+  return fetchData<SysMenu[]>('/sys/menu/select', { signal, key: 'menuList' })
 }
 
 export function fetchSysMenu(menuId: Id, signal?: AbortSignal): Promise<SysMenu> {
-  return fetchData<SysMenu>(`/sys/menu/info/${menuId}`, { signal })
+  return fetchData<SysMenu>(`/sys/menu/info/${menuId}`, { signal, key: 'menu' })
 }
 
 export function createSysMenu(m: Omit<SysMenu, 'menuId' | 'list'>): Promise<unknown> {
@@ -260,7 +260,7 @@ export function fetchSysConfigs(
 }
 
 export function fetchSysConfig(id: Id, signal?: AbortSignal): Promise<SysConfig> {
-  return fetchData<SysConfig>(`/sys/config/info/${id}`, { signal })
+  return fetchData<SysConfig>(`/sys/config/info/${id}`, { signal, key: 'config' })
 }
 
 export function createSysConfig(c: Omit<SysConfig, 'id'>): Promise<unknown> {
@@ -428,5 +428,5 @@ export function deleteOssFiles(ids: Id[]): Promise<unknown> {
  * 凭证走 Sealed Secrets 注入到服务里，后台只读不写。
  */
 export function fetchOssConfig(signal?: AbortSignal): Promise<Record<string, unknown>> {
-  return fetchData<Record<string, unknown>>('/sys/oss/config', { signal })
+  return fetchData<Record<string, unknown>>('/sys/oss/config', { signal, key: 'config' })
 }

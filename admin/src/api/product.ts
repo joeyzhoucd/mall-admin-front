@@ -296,7 +296,7 @@ export function deleteSkus(skuIds: Id[]): Promise<unknown> {
 
 /** 单个 SPU 的详情，规格页顶部用来显示「这是哪个商品」。 */
 export function fetchSpuInfo(spuId: Id, signal?: AbortSignal): Promise<Spu> {
-  return fetchData<Spu>(`/product/spuinfo/info/${spuId}`, { signal })
+  return fetchData<Spu>(`/product/spuinfo/info/${spuId}`, { signal, key: 'spuInfo' })
 }
 
 // ---------------------------------------------------------------------------
