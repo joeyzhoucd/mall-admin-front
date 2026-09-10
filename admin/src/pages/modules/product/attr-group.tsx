@@ -95,10 +95,21 @@ export default function AttrGroupPage() {
     {
       id: 'categoryId',
       header: '所属分类',
-      meta: { width: 100 },
-      // 这个接口只返回 categoryId，不返回分类名。显示 id 而不是去逐行查名字：
-      // 那会变成一页 N 次请求，而这一列的价值撑不起那个代价。
-      cell: ({ row }) => <Chip size="small" variant="outlined" label={`#${row.original.categoryId}`} />,
+      meta: { width: 140 },
+      // 2026-09-10 之前这里显示的是 `#3` 这种原始 id —— 因为接口只返回 categoryId。
+      // 当时的取舍是"显示 id 而不是逐行查名字"（一页 N 次请求撑不起这一列的价值），
+      // 那个取舍本身没错，但漏了第三个选项：让后端一次批量查回来。
+      // 现在后端补了 categoryName（AttrGroupServiceImpl.fillCategoryNames，1 次 IN 查询）。
+      //
+      // 仍然保留 id 回落：分组挂在已删除的分类下时 categoryName 是 null，
+      // 那时显示 id 比显示空白有用 —— 至少能拿这个 id 去查是哪条脏数据。
+      cell: ({ row }) => (
+        <Chip
+          size="small"
+          variant="outlined"
+          label={row.original.categoryName ?? `#${row.original.categoryId}`}
+        />
+      ),
     },
     {
       id: 'actions',

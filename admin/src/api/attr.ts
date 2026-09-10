@@ -19,6 +19,14 @@ export interface AttrGroup {
   descript: string | null
   icon: string | null
   sort: number
+  /**
+   * 所属分类名。2026-09-10 后端补上的（一次批量查询，不是逐行查）。
+   *
+   * <p><b>可能是 null</b>：分组挂在已被删除的分类下时后端留空，
+   * 界面要回落显示 categoryId，而不是显示成一片空白 ——
+   * 那是脏数据，但它不该表现成"这一行什么都没有"。
+   */
+  categoryName?: string | null
 }
 
 export interface AttrGroupQuery {
