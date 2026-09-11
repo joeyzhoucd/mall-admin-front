@@ -2,3 +2,6 @@ node_modules/
 .git/
 .idea/
 .vscode/
+# 本地 `npm run build` 的产物。不排除的话它会被 COPY admin/ 带进构建上下文，
+# 然后立刻被容器内的构建覆盖 —— 纯属白传 120 个文件。
+admin/dist/
